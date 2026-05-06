@@ -1,88 +1,132 @@
 import psycopg2
 from psycopg2.extras import execute_values
-import os
+import logging
+
+# Configure logging to see errors in your Ubuntu terminal
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 class DataHandler:
     def __init__(self):
+        # Master Database Configuration
         self.conn_params = {
-            "dbname": "postgres",
+            "dbname": "cvnet2026-capstone-2-database",
             "user": "postgres",
-            "password": "YOUR_PASSWORD", # Replace with actual
-            "host": "YOUR_IP",           # Replace with actual
+            "password": "CV.Net2026@capstone",
+            "host": "35.245.28.42",
             "port": "5432"
         }
 
-    def save_cv_data(self, user_uuid, data):
+    def save_to_postgres(self, user_id, data):
+        """
+        Orchestrates the update of all 14 Master Schema tables.
+        Uses a single transaction (Commit/Rollback) for data integrity.
+        """
         conn = None
         try:
             conn = psycopg2.connect(**self.conn_params)
             cur = conn.cursor()
 
-            # 1. USERS TABLE
+            # --- 1. CORE USER UPDATE ---
+            # We UPDATE because the user record was created during signup
             u = data.get('user', {})
             cur.execute("""
-                INSERT INTO Users (id, full_name, email, phone, address, portfolio_url, employment_status, current_org, current_position, personal_statement, about_me)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                ON CONFLICT (email) DO UPDATE SET full_name = EXCLUDED.full_name;
-            """, (user_uuid, u.get('full_name'), u.get('email'), u.get('phone'), u.get('address'), u.get('portfolio_url'), u.get('employment_status'), u.get('current_org'), u.get('current_position'), u.get('personal_statement'), u.get('about_me')))
+                UPDATE public."user" SET 
+                full_name = %s, phone = %s, address = %s, portfolio_url = %s,
+                employment_status = %s, current_org = %s, current_position = %s,
+                personal_statement = %s, about_me = %s, updated_at = CURRENT_TIMESTAMP
+                WHERE id = %s
+            """, (
+                u.get('fullName') or "", 
+                u.get('phone') or "", 
+                u.get('address') or "", 
+                u.get('portfolioUrl') or "", 
+                u.get('employmentStatus') or "Unemployed", 
+                u.get('currentOrg') or "", 
+                u.get('currentPosition') or "",
+                u.get('personalStatement') or "", 
+                u.get('aboutMe') or "", 
+                user_id
+            ))
 
-            # HELPER FOR BULK INSERTS
-            def bulk_insert(table, columns, data_list, mapping_func):
-                if data_list:
-                    vals = [mapping_func(item) for item in data_list]
-                    col_str = ", ".join(columns)
-                    placeholders = ", ".join(["%s"] * len(columns))
-                    query = f"INSERT INTO {table} ({col_str}) VALUES ({placeholders})"
-                    execute_values(cur, f"INSERT INTO {table} ({col_str}) VALUES %s", vals)
+            # --- 2. THE SYNC HELPER ---
+            # This function wipes old data and inserts new data for a specific sub-table
+            def sync_table(table_name, columns, data_key, mapping_func):
+                items = data.get(data_key, [])
+                # 1. Clear existing records for this user (Fresh Sync)
+                cur.execute(f'DELETE FROM public."{table_name}" WHERE user_id = %s', (user_id,))
+                
+                if items:
+                    # 2. Prepare values with empty string fallbacks
+                    vals = [mapping_func(item) for item in items]
+                    # 3. Add standard timestamps
+                    col_str = ", ".join(columns) + ", created_at, updated_at"
+                    execute_values(cur, f'INSERT INTO public."{table_name}" ({col_str}) VALUES %s', 
+                                   [v + ('now', 'now') for v in vals])
 
-            # 2. SOCIAL LINKS
-            bulk_insert("SocialLinks", ["user_id", "platform_name", "profile_url"], data.get('social_links'), 
-                        lambda x: (user_uuid, x.get('platform_name'), x.get('profile_url')))
+            # --- 3. EXECUTE SYNC FOR ALL TABLES ---
 
-            # 3. SKILLS
-            bulk_insert("Skills", ["user_id", "skill_name", "level"], data.get('skills'), 
-                        lambda x: (user_uuid, x.get('skill_name'), x.get('level')))
+            # Social Links
+            sync_table("social_link", ["user_id", "platform_name", "profile_url"], "socialLinks", 
+                       lambda x: (user_id, x.get('platformName') or "", x.get('profileUrl') or ""))
 
-            # 4. EXPERIENCE
-            bulk_insert("Experience", ["user_id", "company_name", "start_date", "end_date", "role_description"], data.get('experience'), 
-                        lambda x: (user_uuid, x.get('company_name'), x.get('start_date'), x.get('end_date'), x.get('role_description')))
+            # Skills
+            sync_table("skill", ["user_id", "skill_name", "level"], "skills", 
+                       lambda x: (user_id, x.get('skillName') or "", x.get('level') or "Beginner"))
 
-            # 5. EDUCATION
-            bulk_insert("Education", ["user_id", "degree_title", "field_of_study", "organization", "start_date", "end_date", "honors", "thesis_title", "relevant_coursework"], data.get('education'), 
-                        lambda x: (user_uuid, x.get('degree_title'), x.get('field_of_study'), x.get('organization'), x.get('start_date'), x.get('end_date'), x.get('honors'), x.get('thesis_title'), x.get('relevant_coursework')))
+            # Experience
+            sync_table("experience", ["user_id", "company_name", "start_date", "end_date", "role_description"], "experience", 
+                       lambda x: (user_id, x.get('companyName') or "", x.get('startDate') or '1900-01-01', x.get('endDate'), x.get('roleDescription') or ""))
 
-            # 6. PROJECTS
-            bulk_insert("Projects", ["user_id", "name", "description", "time_period", "role", "organization", "source_link"], data.get('projects'), 
-                        lambda x: (user_uuid, x.get('name'), x.get('description'), x.get('time_period'), x.get('role'), x.get('organization'), x.get('source_link')))
+            # Education (8 fields)
+            sync_table("education", ["user_id", "degree_title", "field_of_study", "organization", "start_date", "end_date", "honors", "thesis_title", "relevant_coursework"], "education", 
+                       lambda x: (user_id, x.get('degreeTitle') or "", x.get('fieldOfStudy') or "", x.get('organization') or "", x.get('startDate') or '1900-01-01', x.get('endDate') or '1900-01-01', x.get('honors') or "", x.get('thesisTitle') or "", x.get('relevantCoursework') or ""))
 
-            # 7. PUBLICATIONS
-            bulk_insert("Publications", ["user_id", "title", "description", "source_link", "organization", "year"], data.get('publications'), 
-                        lambda x: (user_uuid, x.get('title'), x.get('description'), x.get('source_link'), x.get('organization'), x.get('year')))
+            # Projects
+            sync_table("project", ["user_id", "name", "description", "time_period", "role", "organization", "source_link"], "projects", 
+                       lambda x: (user_id, x.get('name') or "", x.get('description') or "", x.get('timePeriod') or "", x.get('role') or "", x.get('organization') or "", x.get('sourceLink') or ""))
 
-            # 8. TEACHING / RESEARCH / AWARDS / VOLUNTEER
-            bulk_insert("TeachingExperience", ["user_id", "courses_taught", "organization", "time_period", "curriculum_description"], data.get('teaching_experience'), 
-                        lambda x: (user_uuid, x.get('courses_taught'), x.get('organization'), x.get('time_period'), x.get('curriculum_description')))
-            
-            bulk_insert("ResearchExperience", ["user_id", "project_name", "lab_or_field_work", "organization", "results_description"], data.get('research_experience'), 
-                        lambda x: (user_uuid, x.get('project_name'), x.get('lab_or_field_work'), x.get('organization'), x.get('results_description')))
+            # Certifications
+            sync_table("certification", ["user_id", "organization", "field", "issue_date"], "certifications", 
+                       lambda x: (user_id, x.get('organization') or "", x.get('field') or "", x.get('issueDate') or '1900-01-01'))
 
-            bulk_insert("Awards", ["user_id", "award_name", "organization", "description"], data.get('awards'), 
-                        lambda x: (user_uuid, x.get('award_name'), x.get('organization'), x.get('description')))
+            # Memberships
+            sync_table("membership", ["user_id", "organization_name"], "memberships", 
+                       lambda x: (user_id, x.get('organizationName') or ""))
 
-            bulk_insert("VolunteerExperience", ["user_id", "organization", "role", "description"], data.get('volunteer_experience'), 
-                        lambda x: (user_uuid, x.get('organization'), x.get('role'), x.get('description')))
+            # Languages
+            sync_table("language", ["user_id", "language_name", "proficiency"], "languages", 
+                       lambda x: (user_id, x.get('languageName') or "", x.get('proficiency') or "Beginner"))
+
+            # Publications
+            sync_table("publication", ["user_id", "title", "description", "source_link", "organization", "year"], "publications", 
+                       lambda x: (user_id, x.get('title') or "", x.get('description') or "", x.get('sourceLink') or "", x.get('organization') or "", x.get('year') or 0))
+
+            # Teaching
+            sync_table("teaching_experience", ["user_id", "courses_taught", "organization", "time_period", "curriculum_description"], "teachingExperience", 
+                       lambda x: (user_id, x.get('coursesTaught') or "", x.get('organization') or "", x.get('timePeriod') or "", x.get('curriculumDescription') or ""))
+
+            # Research
+            sync_table("research_experience", ["user_id", "project_name", "lab_or_field_work", "organization", "results_description"], "researchExperience", 
+                       lambda x: (user_id, x.get('projectName') or "", x.get('labOrFieldWork') or "", x.get('organization') or "", x.get('resultsDescription') or ""))
+
+            # Awards
+            sync_table("award", ["user_id", "award_name", "organization", "description"], "awards", 
+                       lambda x: (user_id, x.get('awardName') or "", x.get('organization') or "", x.get('description') or ""))
+
+            # Volunteer
+            sync_table("volunteer", ["user_id", "organization", "role", "description"], "volunteer", 
+                       lambda x: (user_id, x.get('organization') or "", x.get('role') or "", x.get('description') or ""))
 
             conn.commit()
-            print("✅ All tables updated successfully.")
+            logger.info(f"✅ Success: CV for User {user_id} fully synced to PostgreSQL.")
             return True
-        except Exception as e:
-            if conn: conn.rollback()
-            print(f"❌ DB Error: {e}")
-            return False
-        finally:
-            if conn: conn.close()
 
-    def cleanup_temp_files(self, filenames):
-        for f in filenames:
-            if os.path.exists(f):
-                os.remove(f)
+        except Exception as e:
+            if conn:
+                conn.rollback()
+            logger.error(f"❌ Database Sync Error: {e}")
+            raise e
+        finally:
+            if conn:
+                conn.close()
