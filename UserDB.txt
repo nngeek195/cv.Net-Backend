@@ -1,0 +1,176 @@
+# CV.net Master Schema - Version 2.0
+
+# 1. Enums for Data Integrity
+enum EmploymentStatus {
+  Employed
+  Unemployed
+}
+
+enum SkillLevel {
+  Beginner
+  Intermediate
+  Expert
+}
+
+enum LanguageLevel {
+  Beginner
+  Intermediate
+  Expert
+}
+
+# 2. Core User Table
+type User @table {
+  id: UUID! @default(expr: "uuid_generate_v4()")
+  fullName: String!
+  email: String! @unique
+  phone: String
+  address: String
+  portfolioUrl: String
+  employmentStatus: EmploymentStatus!
+  currentOrg: String # Nullable for Unemployed
+  currentPosition: String # Nullable for Unemployed
+  personalStatement: String # Professional elevator pitch
+  aboutMe: String # Personal passions and narrative bio
+  createdAt: Timestamp! @default(expr: "request.time")
+  updatedAt: Timestamp! @default(expr: "request.time")
+}
+
+# 3. Relational Sub-Tables
+type SocialLink @table {
+  id: UUID! @default(expr: "uuid_generate_v4()")
+  user: User!
+  platformName: String! # e.g., GitHub, LinkedIn
+  profileUrl: String!
+  createdAt: Timestamp! @default(expr: "request.time")
+  updatedAt: Timestamp! @default(expr: "request.time")
+}
+
+type Skill @table {
+  id: UUID! @default(expr: "uuid_generate_v4()")
+  user: User!
+  skillName: String!
+  level: SkillLevel!
+  createdAt: Timestamp! @default(expr: "request.time")
+  updatedAt: Timestamp! @default(expr: "request.time")
+}
+
+type Experience @table {
+  id: UUID! @default(expr: "uuid_generate_v4()")
+  user: User!
+  companyName: String!
+  startDate: Date!
+  endDate: Date # Nullable for 'Present'
+  roleDescription: String!
+  createdAt: Timestamp! @default(expr: "request.time")
+  updatedAt: Timestamp! @default(expr: "request.time")
+}
+
+type Education @table {
+  id: UUID! @default(expr: "uuid_generate_v4()")
+  user: User!
+  degreeTitle: String!
+  fieldOfStudy: String!
+  organization: String!
+  startDate: Date!
+  endDate: Date!
+  honors: String
+  thesisTitle: String
+  relevantCoursework: String # Use JSON string or formatted text
+  createdAt: Timestamp! @default(expr: "request.time")
+  updatedAt: Timestamp! @default(expr: "request.time")
+}
+
+type Certification @table {
+  id: UUID! @default(expr: "uuid_generate_v4()")
+  user: User!
+  organization: String!
+  field: String!
+  issueDate: Date!
+  createdAt: Timestamp! @default(expr: "request.time")
+  updatedAt: Timestamp! @default(expr: "request.time")
+}
+
+type Membership @table {
+  id: UUID! @default(expr: "uuid_generate_v4()")
+  user: User!
+  organizationName: String!
+  createdAt: Timestamp! @default(expr: "request.time")
+  updatedAt: Timestamp! @default(expr: "request.time")
+}
+
+type Language @table {
+  id: UUID! @default(expr: "uuid_generate_v4()")
+  user: User!
+  languageName: String!
+  proficiency: LanguageLevel!
+  createdAt: Timestamp! @default(expr: "request.time")
+  updatedAt: Timestamp! @default(expr: "request.time")
+}
+
+type Project @table {
+  id: UUID! @default(expr: "uuid_generate_v4()")
+  user: User!
+  name: String!
+  description: String!
+  timePeriod: String!
+  role: String!
+  organization: String!
+  sourceLink: String!
+  createdAt: Timestamp! @default(expr: "request.time")
+  updatedAt: Timestamp! @default(expr: "request.time")
+}
+
+type Publication @table {
+  id: UUID! @default(expr: "uuid_generate_v4()")
+  user: User!
+  title: String!
+  description: String!
+  sourceLink: String!
+  organization: String!
+  year: Int!
+  createdAt: Timestamp! @default(expr: "request.time")
+  updatedAt: Timestamp! @default(expr: "request.time")
+}
+
+type TeachingExperience @table {
+  id: UUID! @default(expr: "uuid_generate_v4()")
+  user: User!
+  coursesTaught: String!
+  organization: String!
+  timePeriod: String!
+  curriculumDescription: String!
+  createdAt: Timestamp! @default(expr: "request.time")
+  updatedAt: Timestamp! @default(expr: "request.time")
+}
+
+type ResearchExperience @table {
+  id: UUID! @default(expr: "uuid_generate_v4()")
+  user: User!
+  projectName: String!
+  labOrFieldWork: String
+  organization: String!
+  resultsDescription: String!
+  linkedPublication: Publication # Reference to the Publication table
+  createdAt: Timestamp! @default(expr: "request.time")
+  updatedAt: Timestamp! @default(expr: "request.time")
+}
+
+type Award @table {
+  id: UUID! @default(expr: "uuid_generate_v4()")
+  user: User!
+  awardName: String!
+  organization: String!
+  description: String!
+  createdAt: Timestamp! @default(expr: "request.time")
+  updatedAt: Timestamp! @default(expr: "request.time")
+}
+
+type Volunteer @table {
+  id: UUID! @default(expr: "uuid_generate_v4()")
+  user: User!
+  organization: String!
+  role: String!
+  description: String!
+  createdAt: Timestamp! @default(expr: "request.time")
+  updatedAt: Timestamp! @default(expr: "request.time")
+}

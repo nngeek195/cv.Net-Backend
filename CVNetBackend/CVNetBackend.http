@@ -1,0 +1,6 @@
+@CVNetBackend_HostAddress = http://localhost:5167
+
+GET {{CVNetBackend_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

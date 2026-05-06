@@ -1,0 +1,13 @@
+specVersion: "v1"
+serviceId: "cvnet2026-capstone-2-service"
+location: "us-east4"
+schemas:
+  - source: "./schema"
+    datasource:
+      postgresql:
+        database: "cvnet2026-capstone-2-database"
+        cloudSql:
+          instanceId: "cvnet2026-capstone-instance"
+          # schemaValidation: "STRICT"     # STRICT mode makes Postgres schema match Data Connect exactly.
+          # schemaValidation: "COMPATIBLE" # COMPATIBLE mode makes Postgres schema compatible with Data Connect.
+connectorDirs: ["./example"]

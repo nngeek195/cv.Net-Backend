@@ -1,0 +1,140 @@
+type User @table {
+  fullName: String!
+  email: String!
+  employmentStatus: String!
+  createdAt: Timestamp!
+  updatedAt: Timestamp!
+  phone: String
+  address: String
+  portfolioUrl: String
+  currentOrg: String
+  currentPosition: String
+  personalStatement: String
+  aboutMe: String
+}
+
+type SocialLink @table {
+  user: User!
+  platformName: String!
+  profileUrl: String!
+  createdAt: Timestamp!
+  updatedAt: Timestamp!
+}
+
+type Skill @table {
+  user: User!
+  skillName: String!
+  level: String! # Enum: `Beginner`, `Intermediate`, `Expert`
+  createdAt: Timestamp!
+  updatedAt: Timestamp!
+}
+
+type Experience @table {
+  user: User!
+  companyName: String!
+  startDate: Date!
+  roleDescription: String!
+  createdAt: Timestamp!
+  updatedAt: Timestamp!
+  endDate: Date
+}
+
+type Education @table {
+  user: User!
+  degreeTitle: String!
+  fieldOfStudy: String!
+  organization: String!
+  startDate: Date!
+  endDate: Date!
+  createdAt: Timestamp!
+  updatedAt: Timestamp!
+  honors: String
+  thesisTitle: String
+  relevantCoursework: String
+}
+
+type Project @table {
+  user: User!
+  name: String!
+  description: String!
+  timePeriod: String!
+  role: String!
+  organization: String!
+  sourceLink: String!
+  createdAt: Timestamp!
+  updatedAt: Timestamp!
+}
+
+type Publication @table {
+  user: User!
+  title: String!
+  description: String!
+  sourceLink: String!
+  organization: String!
+  year: Int!
+  createdAt: Timestamp!
+  updatedAt: Timestamp!
+}
+
+type Certification @table {
+  user: User!
+  organization: String!
+  field: String!
+  issueDate: Date!
+  createdAt: Timestamp!
+  updatedAt: Timestamp!
+}
+
+type Membership @table {
+  user: User!
+  organizationName: String!
+  createdAt: Timestamp!
+  updatedAt: Timestamp!
+}
+
+type Language @table {
+  user: User!
+  languageName: String!
+  proficiency: String! # Enum: `Beginner`, `Intermediate`, `Expert`
+  createdAt: Timestamp!
+  updatedAt: Timestamp!
+}
+
+type TeachingExperience @table {
+  user: User!
+  coursesTaught: String!
+  organization: String!
+  timePeriod: String!
+  curriculumDescription: String!
+  createdAt: Timestamp!
+  updatedAt: Timestamp!
+}
+
+type ResearchExperience @table {
+  user: User!
+  projectName: String!
+  organization: String!
+  resultsDescription: String!
+  createdAt: Timestamp!
+  updatedAt: Timestamp!
+  labOrFieldWork: String
+  linkedPublication: Publication
+}
+
+type Award @table {
+  user: User!
+  awardName: String!
+  organization: String!
+  description: String!
+  createdAt: Timestamp!
+  updatedAt: Timestamp!
+}
+
+type Volunteer @table {
+  user: User!
+  organization: String!
+  role: String!
+  description: String!
+  createdAt: Timestamp!
+  updatedAt: Timestamp!
+}
