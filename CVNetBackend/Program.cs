@@ -1,6 +1,6 @@
 using FirebaseAdmin;
 using Google.Apis.Auth.OAuth2;
-using CVNetBackend.Services;
+using CVNetBackend.LoginManagement.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 

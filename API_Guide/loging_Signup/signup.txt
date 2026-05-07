@@ -1,0 +1,26 @@
+1. Email Password
+
+    Post
+
+    http://localhost:5167/api/auth/signup
+
+    Raw - JSON
+
+    {
+        "firstName": "Niranga",
+        "lastName": "Nayanajith",
+        "email": "niranga1.dev@example.com",
+        "password": "MyStrongPassword2026!"
+    }
+
+2. GoogleAuth
+
+    Post
+
+    http://localhost:5167/api/auth/google
+
+    Raw - JSON
+
+    {
+        "idToken": "PASTE_THE_LONG_TOKEN_FROM_HTML_HERE"
+    }

@@ -1,4 +1,4 @@
-namespace CVNetBackend.Models;
+namespace CVNetBackend.LoginManagement.Models;
 
 public class UserProfile
 {

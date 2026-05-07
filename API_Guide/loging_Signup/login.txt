@@ -1,0 +1,30 @@
+use the html make the Token
+
+2. Testing in Postman
+Once you have the token from either the Google popup or the Email form, follow these steps to test your backend.
+
+Step 1: Set the Request Details
+
+Method: POST
+
+URL: http://localhost:5167/api/auth/login
+
+Step 2: Configure the Body
+
+Click the Body tab.
+
+Select the raw radio button.
+
+Change the format dropdown (at the end of the row) to JSON.
+
+Paste the following JSON, replacing the value with the token from your HTML tool:
+
+JSON
+{
+  "idToken": "PASTE_THE_LONG_TOKEN_FROM_HTML_HERE"
+}
+Step 3: Send and Verify
+
+Click Send.
+
+You should receive a 200 OK response with a message confirming the sync.

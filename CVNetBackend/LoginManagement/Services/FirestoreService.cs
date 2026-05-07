@@ -1,6 +1,6 @@
 using Google.Cloud.Firestore;
 
-namespace CVNetBackend.Services;
+namespace CVNetBackend.LoginManagement.Services;
 
 public class FirestoreService
 {
