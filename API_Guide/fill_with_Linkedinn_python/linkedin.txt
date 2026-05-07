@@ -1,0 +1,11 @@
+To test this endpoint, configure your Postman request as follows:
+
+Method: POST
+
+URL: http://localhost:8000/sync-linkedin
+
+Body: Select form-data.
+
+Key: user_id | Value: [The-User-Firebase-UID]
+
+Key: profile_url | Value: https://www.linkedin.com/in/username/
