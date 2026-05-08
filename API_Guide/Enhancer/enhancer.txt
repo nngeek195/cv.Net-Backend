@@ -1,6 +1,6 @@
 Method: POST
 
-URL: http://localhost:8000/ai/enhance
+URL: http://localhost:5167/api/Enhance
 
 Body (form-data):
 
