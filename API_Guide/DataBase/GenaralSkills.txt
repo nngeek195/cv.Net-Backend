@@ -1,0 +1,14 @@
+type GeneralSkill @table(name: "general_skills") {
+  id: UUID! @default(expr: "uuidV4()") 
+  jobRole: String! @col(name: "job_role")
+  skillName: String! @col(name: "skill_name")
+  level: GeneralSkillLevel!
+  createdAt: Timestamp! @default(expr: "request.time")
+  updatedAt: Timestamp! @default(expr: "request.time")
+}
+
+#How to add data
+INSERT INTO public.general_skills (job_role, skill_name, level)
+VALUES 
+('Cybersecurity Analyst', 'Nmap', 'Intermediate'),
+('Software Engineer', 'Python', 'Expert');

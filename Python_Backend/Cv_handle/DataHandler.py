@@ -44,6 +44,7 @@ class DataHandler:
                 u.get('address') or "", 
                 u.get('portfolioUrl') or "", 
                 u.get('employmentStatus') or "Unemployed", 
+                u.get('GPA') or "",
                 u.get('currentOrg') or "", 
                 u.get('currentPosition') or "",
                 u.get('personalStatement') or "", 

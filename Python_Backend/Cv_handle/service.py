@@ -35,7 +35,7 @@ STRICT RULES:
 REQUIRED JSON STRUCTURE:
 {
   "user": {
-    "fullName": "...", "email": "...", "phone": "...", "address": "...", 
+    "fullName": "...", "email": "...", "GPA": "...", "phone": "...", "address": "...", 
     "portfolioUrl": "...", "employmentStatus": "...", "currentOrg": "...", 
     "currentPosition": "...", "personalStatement": "...", "aboutMe": "..."
   },

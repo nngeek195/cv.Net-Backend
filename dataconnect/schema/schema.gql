@@ -3,6 +3,7 @@ type User @table {
   fullName: String!
   email: String!
   employmentStatus: String!
+  gpa: Float
   createdAt: Timestamp!
   updatedAt: Timestamp!
   phone: String
@@ -138,4 +139,19 @@ type Volunteer @table {
   description: String!
   createdAt: Timestamp!
   updatedAt: Timestamp!
+}
+
+enum GeneralSkillLevel {
+  Beginner
+  Intermediate
+  Expert
+}
+
+type GeneralSkill @table(name: "general_skills") {
+  id: UUID! @default(expr: "uuidV4()") 
+  jobRole: String! @col(name: "job_role")
+  skillName: String! @col(name: "skill_name")
+  level: GeneralSkillLevel!
+  createdAt: Timestamp! @default(expr: "request.time")
+  updatedAt: Timestamp! @default(expr: "request.time")
 }
