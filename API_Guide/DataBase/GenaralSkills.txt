@@ -3,12 +3,14 @@ type GeneralSkill @table(name: "general_skills") {
   jobRole: String! @col(name: "job_role")
   skillName: String! @col(name: "skill_name")
   level: GeneralSkillLevel!
+  jobCategory: JobCategory! @ref
   createdAt: Timestamp! @default(expr: "request.time")
   updatedAt: Timestamp! @default(expr: "request.time")
 }
 
-#How to add data
-INSERT INTO public.general_skills (job_role, skill_name, level)
+enter data into the general_skills table
+
+INSERT INTO public.general_skills (job_role, skill_name, level, job_category_id)
 VALUES 
-('Cybersecurity Analyst', 'Nmap', 'Intermediate'),
-('Software Engineer', 'Python', 'Expert');
+('Cybersecurity Analyst', 'Nmap', 'Intermediate', 'YOUR_CYBER_CATEGORY_UUID_HERE'),
+('Software Engineer', 'Python', 'Expert', 'YOUR_SWE_CATEGORY_UUID_HERE');

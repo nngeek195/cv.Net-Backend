@@ -1,0 +1,90 @@
+enum EmployeeCountRange {
+  SOLO                # 1 person (Owner/Founder)
+  SMALL_2_10          # 2-10 employees
+  MID_SIZE_11_50      # 11-50 employees
+  GROWING_51_200      # 51-200 employees
+  ENTERPRISE_201_1000 # 201-1000 employees
+  GLOBAL_1000_PLUS    # 1000+ employees
+}
+
+enum EmploymentType { INTERNSHIP, FULL_TIME, PART_TIME, CONTRACT }
+enum WorkplaceType { REMOTE, HYBRID, ONSITE }
+enum SkillLevelRequirement { BEGINNER, INTERMEDIATE, EXPERT }
+
+type Company @table(name: "companies") {
+  id: UUID! @default(expr: "uuidV4()")
+  name: String! @unique
+  logoUrl: String
+  description: String
+  siteLink: String
+  hrEmail: String!
+  hrContactPhone: String
+  employeeCount: EmployeeCountRange!
+  createdAt: Timestamp! @default(expr: "request.time")
+}
+
+# Handles Multi-country requirements professionally
+type CompanyLocation @table(name: "company_locations") {
+  id: UUID! @default(expr: "uuidV4()")
+  company: Company! @ref
+  countryName: String!
+  isHeadquarters: Boolean @default(value: false)
+}
+
+type Job @table(name: "jobs") {
+  id: UUID! @default(expr: "uuidV4()")
+  company: Company! @ref
+  jobCategory: JobCategory! @ref # References your existing JobCategory table
+  title: String!
+  employmentType: EmploymentType!
+  workplaceType: WorkplaceType!
+  location: String # Defaulted to Company location in logic
+  openings: Int @default(value: 1)
+  description: String!
+  responsibilities: String!
+  salaryRange: String
+  currency: String @default(value: "LKR")
+  applicationDeadline: Timestamp!
+  expireDate: Timestamp! # Derived from Deadline
+  hrContactEmail: String!
+  createdAt: Timestamp! @default(expr: "request.time")
+}
+
+# Experience level table allowing custom company definitions
+type JobExperienceRequirement @table(name: "job_experience") {
+  id: UUID! @default(expr: "uuidV4()")
+  job: Job! @ref
+  levelName: String! # e.g., "Senior" or "Lead"
+  minYears: Int!
+  maxYears: Int
+}
+
+# Handles multiple skill requirements with levels
+type JobSkillRequirement @table(name: "job_skills") {
+  id: UUID! @default(expr: "uuidV4()")
+  job: Job! @ref
+  skillName: String!
+  requiredLevel: SkillLevelRequirement!
+}
+
+# Handles multiple education requirements (e.g., BSc or BEng)
+type JobEducationRequirement @table(name: "job_education") {
+  id: UUID! @default(expr: "uuidV4()")
+  job: Job! @ref
+  degreeName: String! # e.g., "BSc Hons in Engineering"
+}
+
+type JobApplication @table(name: "job_applications") {
+  id: UUID! @default(expr: "uuidV4()")
+  user: User! @ref # References your existing User table
+  job: Job! @ref
+  appliedDate: Timestamp! @default(expr: "request.time")
+  status: String @default(value: "Pending")
+}
+
+type HiredRecord @table(name: "hired_records") {
+  id: UUID! @default(expr: "uuidV4()")
+  user: User! @ref
+  job: Job! @ref
+  hiredDate: Timestamp! @default(expr: "request.time")
+}

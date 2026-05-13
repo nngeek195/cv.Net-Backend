@@ -154,6 +154,101 @@ type GeneralSkill @table(name: "general_skills") {
   jobRole: String! @col(name: "job_role")
   skillName: String! @col(name: "skill_name")
   level: GeneralSkillLevel!
+  jobCategory: JobCategory! @ref
   createdAt: Timestamp! @default(expr: "request.time")
   updatedAt: Timestamp! @default(expr: "request.time")
 }
+
+type JobCategory @table(name: "job_categories") {
+  id: UUID! @default(expr: "uuidV4()")
+  name: String! @unique
+  createdAt: Timestamp! @default(expr: "request.time")
+}
+
+enum EmployeeCountRange {
+  SOLO
+  SMALL_2_10
+  MID_SIZE_11_50
+  GROWING_51_200
+  ENTERPRISE_201_1000
+  GLOBAL_1000_PLUS
+}
+
+enum EmploymentType { INTERNSHIP, FULL_TIME, PART_TIME, CONTRACT }
+enum WorkplaceType { REMOTE, HYBRID, ONSITE }
+enum SkillLevelRequirement { BEGINNER, INTERMEDIATE, EXPERT }
+
+type Company @table(name: "companies") {
+  id: UUID! @default(expr: "uuidV4()")
+  name: String! @unique
+  logoUrl: String
+  description: String
+  siteLink: String
+  hrEmail: String!
+  hrContactPhone: String
+  employeeCount: EmployeeCountRange!
+  createdAt: Timestamp! @default(expr: "request.time")
+}
+
+type CompanyLocation @table(name: "company_locations") {
+  id: UUID! @default(expr: "uuidV4()")
+  company: Company! @ref
+  countryName: String!
+  isHeadquarters: Boolean @default(value: false)
+}
+
+type Job @table(name: "jobs") {
+  id: UUID! @default(expr: "uuidV4()")
+  company: Company! @ref
+  jobCategory: JobCategory! @ref
+  title: String!
+  employmentType: EmploymentType!
+  workplaceType: WorkplaceType!
+  location: String
+  openings: Int @default(value: 1)
+  description: String!
+  responsibilities: String!
+  salaryRange: String
+  currency: String @default(value: "LKR")
+  applicationDeadline: Timestamp!
+  expireDate: Timestamp!
+  hrContactEmail: String!
+  createdAt: Timestamp! @default(expr: "request.time")
+}
+
+type JobExperienceRequirement @table(name: "job_experience") {
+  id: UUID! @default(expr: "uuidV4()")
+  job: Job! @ref
+  levelName: String!
+  minYears: Int!
+  maxYears: Int
+}
+
+type JobSkillRequirement @table(name: "job_skills") {
+  id: UUID! @default(expr: "uuidV4()")
+  job: Job! @ref
+  skillName: String!
+  requiredLevel: SkillLevelRequirement!
+}
+
+type JobEducationRequirement @table(name: "job_education") {
+  id: UUID! @default(expr: "uuidV4()")
+  job: Job! @ref
+  degreeName: String!
+}
+
+type JobApplication @table(name: "job_applications") {
+  id: UUID! @default(expr: "uuidV4()")
+  user: User! @ref
+  job: Job! @ref
+  appliedDate: Timestamp! @default(expr: "request.time")
+  status: String @default(value: "Pending")
+}
+
+type HiredRecord @table(name: "hired_records") {
+  id: UUID! @default(expr: "uuidV4()")
+  user: User! @ref
+  job: Job! @ref
+  hiredDate: Timestamp! @default(expr: "request.time")
+}
+
