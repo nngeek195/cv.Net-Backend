@@ -1,7 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using FirebaseAdmin.Auth;
 using CVNetBackend.LoginManagement.Models;
-using CVNetBackend.LoginManagement.Services;
+using CVNetBackend.Services;
 
 namespace CVNetBackend.LoginManagement.Controllers;
 

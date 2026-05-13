@@ -14,6 +14,7 @@ type User @table {
   currentPosition: String
   personalStatement: String
   aboutMe: String
+  profileImageUrl: String
 }
 
 type SocialLink @table {

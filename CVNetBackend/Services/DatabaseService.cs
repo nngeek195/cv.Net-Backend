@@ -1,6 +1,6 @@
 using Npgsql;
 
-namespace CVNetBackend.LoginManagement.Services;
+namespace CVNetBackend.Services;
 
 public class DatabaseService
 {
@@ -13,7 +13,7 @@ public class DatabaseService
         string user = Environment.GetEnvironmentVariable("DB_USER");
         string password = Environment.GetEnvironmentVariable("DB_PASSWORD");
         string database = Environment.GetEnvironmentVariable("DB_NAME");
-        string port = Environment.GetEnvironmentVariable("DB_PORT") ?? "5432";
+        string port = Environment.GetEnvironmentVariable("DB_PORT");
 
         // Building the official Npgsql connection string
         _connectionString = $"Host={host};Port={port};Username={user};Password={password};Database={database};";
@@ -57,6 +57,21 @@ public class DatabaseService
         cmd.Parameters.AddWithValue("id", uid);
         cmd.Parameters.AddWithValue("email", email);
         cmd.Parameters.AddWithValue("fullName", fullName);
+
+        await cmd.ExecuteNonQueryAsync();
+    }
+    // Profile Update
+    public async Task UpdateProfileImage(string uid, string imageUrl)
+    {
+        using var conn = new NpgsqlConnection(_connectionString);
+        await conn.OpenAsync();
+
+        // SQL uses snake_case for column names by convention
+        var sql = @"UPDATE public.""user"" SET profile_image_url = @url, updated_at = CURRENT_TIMESTAMP WHERE id = @id";
+
+        using var cmd = new NpgsqlCommand(sql, conn);
+        cmd.Parameters.AddWithValue("url", imageUrl);
+        cmd.Parameters.AddWithValue("id", uid);
 
         await cmd.ExecuteNonQueryAsync();
     }

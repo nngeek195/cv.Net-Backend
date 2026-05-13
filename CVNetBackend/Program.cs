@@ -1,15 +1,16 @@
 using FirebaseAdmin;
 using Google.Apis.Auth.OAuth2;
-using CVNetBackend.LoginManagement.Services;
+using CVNetBackend.Services;
 using CVNetBackend.Enhancer;
 using dotenv.net;
 using Microsoft.AspNetCore.RateLimiting;
 using System.Threading.RateLimiting;
+using CVNetBackend.ProfileHandler;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // 0. LOAD ENVIRONMENT VARIABLES
-DotEnv.Load();
+dotenv.net.DotEnv.Load();
 
 // 1. SET ENVIRONMENT VARIABLE FOR GOOGLE SDK
 var keyPath = Path.Combine(builder.Environment.ContentRootPath, "firebase-key.json");
@@ -42,6 +43,7 @@ builder.Services.AddRateLimiter(options =>
 builder.Services.AddSingleton<DatabaseService>();
 builder.Services.AddSingleton<FirestoreService>();
 builder.Services.AddSingleton<EnhancerService>();
+builder.Services.AddSingleton<ProfileService>(); 
 
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
