@@ -163,6 +163,7 @@ type GeneralSkill @table(name: "general_skills") {
 type JobCategory @table(name: "job_categories") {
   id: UUID! @default(expr: "uuidV4()")
   name: String! @unique
+  skills: [String!] @col(name: "skills")
   createdAt: Timestamp! @default(expr: "request.time")
 }
 

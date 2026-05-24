@@ -21,29 +21,43 @@ public class AuthController : ControllerBase
     }
 
     [HttpPost("signup")]
-    [Authorize] // 👈 FORCE token verification before processing data
+    [Authorize] 
     public async Task<IActionResult> SignUp([FromBody] SignupRequest request)
     {
+        if (!ModelState.IsValid)
+        {
+            var errors = string.Join("; ", ModelState.Values
+                                    .SelectMany(x => x.Errors)
+                                    .Select(x => x.ErrorMessage));
+            return BadRequest(new { error = "Validation Failed", details = errors });
+        }
+        
         if (request.Agreement != "Agreed")
             return BadRequest(new { error = "Terms and Privacy Policy must be accepted." });
 
         try
         {
-            // 👈 SECURELY EXTRACT THE REAL UID FROM THE VALIDATED TOKEN
             var uid = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            
             if (string.IsNullOrEmpty(uid))
                 return Unauthorized(new { error = "Identity token validation failed." });
 
-            // 1. Sync to Firestore (Pass the verified UID)
-            await _fs.CreateUserDocument(uid, request.FirstName, request.LastName, request.Email, request.Agreement);
+            await _fs.CreateUserDocument(uid, request.FirstName, request.LastName, request.Email);
             
-            // 2. Sync to PostgreSQL (Pass the verified UID)
-            await _db.UpsertUserToPostgres(uid, request.Email, $"{request.FirstName} {request.LastName}", request.Agreement);
+            // ✅ Merges FirstName and LastName into a single string for PostgreSQL
+            string fullName = $"{request.FirstName} {request.LastName}".Trim();
+            await _db.UpsertUserToPostgres(uid, request.Email, fullName, request.Agreement);
 
             return Ok(new { message = "User successfully synchronized everywhere!", uid = uid });
         }
         catch (Exception ex)
         {
+            // 🛑 FORCE THE EXACT POSTGRESQL ERROR INTO THE TERMINAL
+            Console.WriteLine("=========================================");
+            Console.WriteLine("🚨 [CRITICAL DATABASE CRASH] 🚨");
+            Console.WriteLine(ex.Message);
+            Console.WriteLine("=========================================");
+            
             return BadRequest(new { error = ex.Message });
         }
     }
@@ -64,7 +78,12 @@ public class AuthController : ControllerBase
                 ? decodedToken.Claims["name"]?.ToString() ?? "CV User" 
                 : "CV User";
 
-            await _db.UpsertUserToPostgres(uid, email, name, request.Agreement ?? "Agreed");
+            var parts = name.Trim().Split(' ');
+            string firstName = parts[0];
+            string lastName = parts.Length > 1 ? string.Join(" ", parts.Skip(1)) : "";
+
+            await _fs.UpsertUserDocument(uid, firstName, lastName, email);
+            await _db.UpsertUserToPostgres(uid, email, name, "Agreed");
 
             return Ok(new { 
                 message = "Login and Sync Successful!", 

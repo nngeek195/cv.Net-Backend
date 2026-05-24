@@ -8,6 +8,8 @@ using System.Threading.RateLimiting;
 using CVNetBackend.ProfileHandler;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
+using CVNetBackend.JobRoleManager.Services;
+
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -68,10 +70,15 @@ builder.Services.AddRateLimiter(options =>
 });
 
 // 4. REGISTER SERVICES
-builder.Services.AddSingleton<DatabaseService>();
+
+// 💡 SCOPED LIFETIMES: Required for anything executing isolated database tasks per-request
+builder.Services.AddScoped<DatabaseService>();     
+builder.Services.AddScoped<ProfileService>();      
+builder.Services.AddScoped<SkillMatrixEngine>();   // Shortened cleanly since you added the 'using' block at the top!
+
+// 💡 SINGLETON LIFETIMES: Safe for cross-cutting context providers or pure computational utilities
 builder.Services.AddSingleton<FirestoreService>();
 builder.Services.AddSingleton<EnhancerService>();
-builder.Services.AddSingleton<ProfileService>(); 
 
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
