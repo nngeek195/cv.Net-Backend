@@ -16,6 +16,9 @@ type User @table {
   aboutMe: String
   profileImageUrl: String
   agreement: String
+  appliedJobs: Int @default(value: 0)
+  callsForInterview: Int @default(value: 0)
+  rejectedJobs: Int @default(value: 0)
 }
 
 type SocialLink @table {
@@ -254,3 +257,21 @@ type HiredRecord @table(name: "hired_records") {
   hiredDate: Timestamp! @default(expr: "request.time")
 }
 
+
+
+type CallForInterview @table(name: "call_for_interviews") {
+  id: UUID! @default(expr: "uuidV4()")
+  user: User! @ref
+  job: Job! @ref
+  interviewDate: Timestamp
+  message: String
+  createdAt: Timestamp! @default(expr: "request.time")
+}
+
+type RejectRecord @table(name: "reject_records") {
+  id: UUID! @default(expr: "uuidV4()")
+  user: User! @ref
+  job: Job! @ref
+  reason: String
+  rejectedDate: Timestamp! @default(expr: "request.time")
+}

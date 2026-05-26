@@ -79,10 +79,12 @@ builder.Services.AddScoped<SkillMatrixEngine>();   // Shortened cleanly since yo
 // 💡 SINGLETON LIFETIMES: Safe for cross-cutting context providers or pure computational utilities
 builder.Services.AddSingleton<FirestoreService>();
 builder.Services.AddSingleton<EnhancerService>();
+builder.Services.AddScoped<UserService>();
 
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
+
 
 var app = builder.Build();
 

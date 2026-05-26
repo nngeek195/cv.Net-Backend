@@ -42,22 +42,21 @@ public class AuthController : ControllerBase
             if (string.IsNullOrEmpty(uid))
                 return Unauthorized(new { error = "Identity token validation failed." });
 
+            // 1. Send SPLIT names to Firestore (NoSQL)
             await _fs.CreateUserDocument(uid, request.FirstName, request.LastName, request.Email);
             
-            // ✅ Merges FirstName and LastName into a single string for PostgreSQL
-            string fullName = $"{request.FirstName} {request.LastName}".Trim();
-            await _db.UpsertUserToPostgres(uid, request.Email, fullName, request.Agreement);
+            // 2. Send COMBINED name to PostgreSQL (SQL)
+            string combinedFullName = $"{request.FirstName} {request.LastName}".Trim();
+            await _db.UpsertUserToPostgres(uid, request.Email, combinedFullName, request.Agreement);
 
             return Ok(new { message = "User successfully synchronized everywhere!", uid = uid });
         }
         catch (Exception ex)
         {
-            // 🛑 FORCE THE EXACT POSTGRESQL ERROR INTO THE TERMINAL
             Console.WriteLine("=========================================");
             Console.WriteLine("🚨 [CRITICAL DATABASE CRASH] 🚨");
             Console.WriteLine(ex.Message);
             Console.WriteLine("=========================================");
-            
             return BadRequest(new { error = ex.Message });
         }
     }
@@ -74,15 +73,19 @@ public class AuthController : ControllerBase
                 ? decodedToken.Claims["email"]?.ToString() ?? "" 
                 : "";
             
+            // Google gives us the Full Name in a single string
             string name = decodedToken.Claims.ContainsKey("name") 
                 ? decodedToken.Claims["name"]?.ToString() ?? "CV User" 
                 : "CV User";
 
+            // 1. Split the Google Full Name for Firestore (NoSQL)
             var parts = name.Trim().Split(' ');
             string firstName = parts[0];
             string lastName = parts.Length > 1 ? string.Join(" ", parts.Skip(1)) : "";
 
             await _fs.UpsertUserDocument(uid, firstName, lastName, email);
+
+            // 2. Keep the Google Full Name intact for PostgreSQL (SQL)
             await _db.UpsertUserToPostgres(uid, email, name, "Agreed");
 
             return Ok(new { 

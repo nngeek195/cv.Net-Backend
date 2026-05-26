@@ -62,4 +62,10 @@ public class FirestoreService
         // MergeAll keeps previous additions like custom job roles or bio sections completely safe
         await docRef.SetAsync(userData, SetOptions.MergeAll);
     }
+    // ✅ NEW: Deletes the user document from NoSQL
+    public async Task DeleteUserDocument(string uid)
+    {
+        var docRef = _db.Collection(CollectionName).Document(uid);
+        await docRef.DeleteAsync();
+    }
 }
