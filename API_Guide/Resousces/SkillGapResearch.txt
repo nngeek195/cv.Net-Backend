@@ -2,3 +2,36 @@ The "[Coding War Games]" : https://www.google.com/search?q=Coding+War+Games%22+%
 
 The Dunning-Kruger Effect : 80 - 90
 https://www.google.com/search?q=In+psychology%2C+the+Dunning-Kruger+Effect+proves+that+individuals+with+a+surface-level+understanding+of+a+skill+routinely+overestimate+their+competence%2C+often+claiming+they+know+80%25+to+90%25+of+it.&oq=In+psychology%2C+the+Dunning-Kruger+Effect+proves+that+individuals+with+a+surface-level+understanding+of+a+skill+routinely+overestimate+their+competence%2C+often+claiming+they+know+80%25+to+90%25+of+it.&gs_lcrp=EgZjaHJvbWUyBggAEEUYOTIHCAEQIRiPAjIHCAIQIRiPAjIHCAMQIRiPAtIBBzY2MGowajmoAgawAgHxBbJUlE1ppALQ&sourceid=chrome&ie=UTF-8&zx=1779390328321
+
+
+
+Here is How the skill matching happen:
+
+1. all JobCategory skills related to that job = x
+
+2. In the Genaral Skill section there are n number of beginer level expect skills, m number of intermediate level expect skills, t number of expert level expect skills, then 
+
+Industry expert level = (x*34 + n*8.5 + m*32 + t*85)/(x+n+m+t) = IndustryLevel
+
+
+
+Then as same caculate user skills too but in here if some skills expect_level < User_current level =====> Take Expect_Level = Current_Level
+
+
+
+
+fantacy==============================================================
+
+
+time to deal with, Starting Learning path when user click on it user move to a separate file called learning-path, in here actually this we need to make A to Z block by block, actually this is very beautifulll playgrounf like UI with road map, in here we use a theme same like castle UI need to same like that 
+
+
+
+here what happen, we take what are the missing skills of the user, then we send them and other skills to a AI model as say himthis is a user who come from this industry (industry =job catogary) and here is his missing skills so for these each skills give a small overview about it then recomand 5 projects to do beginer to intermediatate projects, for the all skills we arrange it, exept skills that are come from other skills section, for these skills we do not give any description and we just get 5 prjects to do, then we need to store them in the database (we need to make another table for this and we have to plan it too, lets do it by adding a table to schema.gql and push them ).
+
+
+
+Here is how the UI comes with,
+
+each skills that come with missing secton except other skills, show as castles, it is like a road map with full of castels, when the jurney start 
+
