@@ -1,0 +1,33 @@
+1. Define the Weight Scale
+First, we assign the specific numerical weights to the levels. This will act as the "point value" for both the job requirement and the candidate's capability:
+
+Expert = 100 points
+
+Intermediate = 40 points
+
+Beginner = 10 points
+
+Missing = 0 points
+
+2. The Core Mathematical Logic (Skill-by-Skill)
+$$\text{Earned Points} = \min(C_i, J_i)$$
+
+Scenario A (Exact Match or Overqualified): If the job asks for Intermediate (40) and the user is an Expert (100), 
+the user is capped at the requirement. They earn 40 out of 40 points.
+
+Scenario B (Underqualified): If the job asks for Expert (100) 
+and the user is Intermediate (40), the user earns 40 out of 100 points.
+
+Scenario C (Missing): If the user doesn't have the skill, they earn 0 points
+
+Imagine a Job Post requires three skills:
+React.js (Requires Expert) = 100 points
+Node.js (Requires Intermediate) = 40 points
+Docker (Requires Beginner) = 10 points
+Total Points the Job Demands: 150 points
+
+React.js (Alex is Intermediate) = Earns 40 points (out of 100)
+Node.js (Alex is Expert) = Earns 40 points (Capped at the required 40)
+Docker (Alex is Missing) = Earns 0 points
+Total Points Alex Earned: 80 points
+$$\left( \frac{80}{150} \right) \times 100 = 53.33\%$$

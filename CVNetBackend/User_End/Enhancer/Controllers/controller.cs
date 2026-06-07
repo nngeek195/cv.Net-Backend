@@ -1,7 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
-using CVNetBackend.Enhancer;
+using CVNetBackend.User_End.Enhancer;
 
-namespace CVNetBackend.Controllers;
+namespace CVNetBackend.User_End.Controllers;
 
 [ApiController]
 [Route("api/[controller]")] // This makes the URL: api/Enhance

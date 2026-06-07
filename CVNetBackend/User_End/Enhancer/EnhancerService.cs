@@ -3,7 +3,7 @@ using OpenAI.Chat;
 using System.ClientModel;
 using System.Text.RegularExpressions;
 
-namespace CVNetBackend.Enhancer;
+namespace CVNetBackend.User_End.Enhancer;
 
 public class EnhancerService
 {

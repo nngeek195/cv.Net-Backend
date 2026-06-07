@@ -3,7 +3,7 @@ using Microsoft.AspNetCore.Authorization;
 using CloudinaryDotNet;
 using CloudinaryDotNet.Actions;
 
-namespace CVNetBackend.Controllers;
+namespace CVNetBackend.User_End.Controllers;
 
 [Route("api/[controller]")]
 [ApiController]

@@ -1,7 +1,7 @@
 using FirebaseAdmin;
 using Google.Apis.Auth.OAuth2;
 using CVNetBackend.Services;
-using CVNetBackend.Enhancer;
+using CVNetBackend.User_End.Enhancer;
 using dotenv.net;
 using Microsoft.AspNetCore.RateLimiting;
 using System.Threading.RateLimiting;
@@ -9,6 +9,7 @@ using CVNetBackend.ProfileHandler;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using CVNetBackend.JobRoleManager.Services;
+using CVNetBackend.User_End.JobApply.Services;
 
 // 0. LOAD ENVIRONMENT VARIABLES FIRST!
 // This MUST happen before WebApplication.CreateBuilder so the .NET framework 
@@ -77,10 +78,16 @@ builder.Services.AddScoped<ProfileService>();
 builder.Services.AddScoped<SkillMatrixEngine>();   
 builder.Services.AddScoped<UserService>();
 builder.Services.AddScoped<DashboardService>();
+builder.Services.AddScoped<AdminService>();
 
 // 💡 SINGLETON LIFETIMES: Safe for cross-cutting context providers or pure computational utilities
 builder.Services.AddSingleton<FirestoreService>();
 builder.Services.AddSingleton<EnhancerService>();
+builder.Services.AddScoped<CVNetBackend.Company_End.Services.CompanyJobService>();
+builder.Services.AddScoped<CVNetBackend.User_End.JobApply.Services.CandidateJobService>();
+builder.Services.AddScoped<CVNetBackend.User_End.JobApply.Services.ApplicationService>();
+builder.Services.AddScoped<CVNetBackend.Company_End.Services.CompanyProfileService>();
+builder.Services.AddScoped<CVNetBackend.Company_End.JobManagement.Services.CompanyJobService>();
 
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();

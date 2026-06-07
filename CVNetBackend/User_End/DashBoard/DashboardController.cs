@@ -5,7 +5,7 @@ using System.Security.Claims;
 using Npgsql;
 using Dapper;
 
-namespace CVNetBackend.Controllers;
+namespace CVNetBackend.User_End.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]

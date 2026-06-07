@@ -243,6 +243,8 @@ type JobSkillRequirement @table(name: "job_skills") {
   job: Job! @ref
   skillName: String!
   requiredLevel: SkillLevelRequirement!
+  isVisible: Boolean @default(value: true)
+  showLevel: Boolean @default(value: true)
 }
 
 type JobEducationRequirement @table(name: "job_education") {
@@ -254,8 +256,9 @@ type JobEducationRequirement @table(name: "job_education") {
 type JobApplication @table(name: "job_applications") {
   id: UUID! @default(expr: "uuidV4()")
   user: User! @ref
-  profile: TargetRoleProfile! @ref
+  snapshot: ApplicationSnapshot! @ref
   job: Job! @ref
+  coverLetter: String
   appliedDate: Timestamp! @default(expr: "request.time")
   status: String @default(value: "Pending")
 }
@@ -263,7 +266,7 @@ type JobApplication @table(name: "job_applications") {
 type HiredRecord @table(name: "hired_records") {
   id: UUID! @default(expr: "uuidV4()")
   user: User! @ref
-  profile: TargetRoleProfile! @ref
+  application: JobApplication! @ref 
   job: Job! @ref
   hiredDate: Timestamp! @default(expr: "request.time")
 }
@@ -271,7 +274,7 @@ type HiredRecord @table(name: "hired_records") {
 type CallForInterview @table(name: "call_for_interviews") {
   id: UUID! @default(expr: "uuidV4()")
   user: User! @ref
-  profile: TargetRoleProfile! @ref
+  application: JobApplication! @ref 
   job: Job! @ref
   interviewDate: Timestamp
   message: String
@@ -281,8 +284,139 @@ type CallForInterview @table(name: "call_for_interviews") {
 type RejectRecord @table(name: "reject_records") {
   id: UUID! @default(expr: "uuidV4()")
   user: User! @ref
-  profile: TargetRoleProfile! @ref
+  application: JobApplication! @ref 
   job: Job! @ref
   reason: String
   rejectedDate: Timestamp! @default(expr: "request.time")
+}
+
+
+type ApplicationSnapshot @table(name: "application_snapshots") {
+  id: UUID! @default(expr: "uuidV4()")
+  jobRole: String!
+  portfolioUrl: String
+  currentOrg: String
+  currentPosition: String
+  personalStatement: String
+  aboutMe: String
+  cvUrl: String
+  matchScore: Int          
+  industryScore: Int
+  CompanySkillMatchScore: Int
+  createdAt: Timestamp! @default(expr: "request.time")
+}
+
+
+
+type SnapshotSocialLink @table(name: "snapshot_social_links") {
+  id: UUID! @default(expr: "uuidV4()")
+  snapshot: ApplicationSnapshot! @ref
+  platformName: String!
+  profileUrl: String!
+}
+
+type SnapshotSkill @table(name: "snapshot_skills") {
+  id: UUID! @default(expr: "uuidV4()")
+  snapshot: ApplicationSnapshot! @ref
+  skillName: String!
+  level: String! # Enum: `Beginner`, `Intermediate`, `Expert`
+}
+
+type SnapshotExperience @table(name: "snapshot_experience") {
+  id: UUID! @default(expr: "uuidV4()")
+  snapshot: ApplicationSnapshot! @ref
+  companyName: String!
+  startDate: Date!
+  endDate: Date
+  roleDescription: String!
+}
+
+type SnapshotEducation @table(name: "snapshot_education") {
+  id: UUID! @default(expr: "uuidV4()")
+  snapshot: ApplicationSnapshot! @ref
+  degreeTitle: String!
+  fieldOfStudy: String!
+  organization: String!
+  startDate: Date!
+  endDate: Date!
+  honors: String
+  thesisTitle: String
+  relevantCoursework: String
+}
+
+type SnapshotProject @table(name: "snapshot_projects") {
+  id: UUID! @default(expr: "uuidV4()")
+  snapshot: ApplicationSnapshot! @ref
+  name: String!
+  description: String!
+  timePeriod: String!
+  role: String!
+  organization: String!
+  sourceLink: String!
+}
+
+type SnapshotPublication @table(name: "snapshot_publications") {
+  id: UUID! @default(expr: "uuidV4()")
+  snapshot: ApplicationSnapshot! @ref
+  title: String!
+  description: String!
+  sourceLink: String!
+  organization: String!
+  year: Int!
+}
+
+type SnapshotCertification @table(name: "snapshot_certifications") {
+  id: UUID! @default(expr: "uuidV4()")
+  snapshot: ApplicationSnapshot! @ref
+  organization: String!
+  field: String!
+  issueDate: Date!
+}
+
+type SnapshotMembership @table(name: "snapshot_memberships") {
+  id: UUID! @default(expr: "uuidV4()")
+  snapshot: ApplicationSnapshot! @ref
+  organizationName: String!
+}
+
+type SnapshotLanguage @table(name: "snapshot_languages") {
+  id: UUID! @default(expr: "uuidV4()")
+  snapshot: ApplicationSnapshot! @ref
+  languageName: String!
+  proficiency: String! # Enum: `Beginner`, `Intermediate`, `Expert`
+}
+
+type SnapshotTeachingExperience @table(name: "snapshot_teaching_experience") {
+  id: UUID! @default(expr: "uuidV4()")
+  snapshot: ApplicationSnapshot! @ref
+  coursesTaught: String!
+  organization: String!
+  timePeriod: String!
+  curriculumDescription: String!
+}
+
+type SnapshotResearchExperience @table(name: "snapshot_research_experience") {
+  id: UUID! @default(expr: "uuidV4()")
+  snapshot: ApplicationSnapshot! @ref
+  projectName: String!
+  organization: String!
+  resultsDescription: String!
+  labOrFieldWork: String
+  linkedPublicationTitle: String 
+}
+
+type SnapshotAward @table(name: "snapshot_awards") {
+  id: UUID! @default(expr: "uuidV4()")
+  snapshot: ApplicationSnapshot! @ref
+  awardName: String!
+  organization: String!
+  description: String!
+}
+
+type SnapshotVolunteer @table(name: "snapshot_volunteers") {
+  id: UUID! @default(expr: "uuidV4()")
+  snapshot: ApplicationSnapshot! @ref
+  organization: String!
+  role: String!
+  description: String!
 }

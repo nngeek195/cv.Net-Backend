@@ -55,7 +55,6 @@ public class DashboardService
         using var conn = new NpgsqlConnection(_connString);
         await conn.OpenAsync();
 
-        // ✅ FIX: Pure snake_case
         const string sql = @"
             SELECT DISTINCT c.name as CategoryName, g.job_role as JobRole
             FROM public.job_categories c
@@ -84,7 +83,6 @@ public class DashboardService
 
         var profileId = Guid.NewGuid();
         
-        // ✅ FIX: Pure snake_case insertion
         await conn.ExecuteAsync(@"
             INSERT INTO public.target_role_profiles (id, user_id, job_role, created_at, updated_at)
             VALUES (@id, @u, @role, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);",
@@ -105,7 +103,6 @@ public class DashboardService
         await conn.OpenAsync();
         var result = new DashboardSummaryDto();
 
-        // 1. Fetch Master User Fields
         var userRow = await conn.QueryFirstOrDefaultAsync<dynamic>(
             @"SELECT id, phone, address, gpa, profile_image_url, default_profile_id 
               FROM public.""user"" WHERE id = @u", new { u = userId });
@@ -124,13 +121,9 @@ public class DashboardService
 
         result.ActiveProfileId = requestedProfileId ?? userRow.default_profile_id?.ToString() ?? result.Profiles.FirstOrDefault()?.Id;
 
-        // ========================================================
-        // 🚀 MASTER SECTION-BASED RESUME COMPLETENESS CALCULATION
-        // ========================================================
         double filledSections = 0;
-        double totalSections = 14; // Mapped exactly to your 14 CV sections
+        double totalSections = 14;
 
-        // Section 1: Core Contact Identity (Phone, Address, GPA, Image)
         bool hasPhone = !string.IsNullOrEmpty((string?)userRow.phone);
         bool hasAddress = !string.IsNullOrEmpty((string?)userRow.address);
         bool hasGpa = userRow.gpa != null && userRow.gpa > 0;
@@ -139,7 +132,6 @@ public class DashboardService
 
         if (!string.IsNullOrEmpty(result.ActiveProfileId))
         {
-            // Section 2: Profile Summary Intro (Portfolio, Bio, Current Placement Details)
             var profileRow = await conn.QueryFirstOrDefaultAsync<dynamic>(
                 @"SELECT portfolio_url, current_org, current_position, personal_statement, about_me 
                   FROM public.target_role_profiles WHERE id = @p::uuid", new { p = result.ActiveProfileId });
@@ -155,7 +147,6 @@ public class DashboardService
                 if (hasPortfolio || hasOrg || hasPos || hasStmt || hasAbout) filledSections++;
             }
 
-            // Sections 3 to 14: Relational CV Collection Tables (12 distinct sections)
             string[] subTables = { 
                 "skill", "experience", "education", "project", "publication", 
                 "certification", "membership", "language", "teaching_experience", 
@@ -169,10 +160,8 @@ public class DashboardService
             }
         }
 
-        // Calculate clear, user-driven percentage based on section checkpoints
         result.ActiveProfileData.CompletenessPercentage = (int)Math.Round((filledSections / totalSections) * 100);
 
-        // 5. Pull Skill Matrix Values safely
         try 
         {
             var skillReport = await _skillEngine.CalculateUserReadinessAsync(userId, result.ActiveProfileId);
@@ -180,19 +169,25 @@ public class DashboardService
         } 
         catch { result.ActiveProfileData.SkillMatchPercentage = 0; }
 
-        // 6. Pull Applications Count & Recent Rows
+        // ✅ FIX: Querying Job Applications by linking through the Snapshot Table
         if (!string.IsNullOrEmpty(result.ActiveProfileId))
         {
-            result.ActiveProfileData.RoleAppliedCount = await conn.ExecuteScalarAsync<int>(
-                @"SELECT COUNT(1) FROM public.job_applications WHERE profile_id = @p::uuid", new { p = result.ActiveProfileId });
+            result.ActiveProfileData.RoleAppliedCount = await conn.ExecuteScalarAsync<int>(@"
+                SELECT COUNT(1) 
+                FROM public.job_applications a
+                JOIN public.application_snapshots s ON a.snapshot_id = s.id
+                WHERE s.job_role = (SELECT job_role FROM public.target_role_profiles WHERE id = @p::uuid)
+                AND a.user_id = @u", new { p = result.ActiveProfileId, u = userId });
 
             var apps = await conn.QueryAsync<RecentAppDto>(@"
                 SELECT j.title as Role, c.name as Company, to_char(a.applied_date, 'Mon DD, YYYY') as Date, a.status as Status
                 FROM public.job_applications a
+                JOIN public.application_snapshots s ON a.snapshot_id = s.id
                 JOIN public.jobs j ON a.job_id = j.id
                 JOIN public.companies c ON j.company_id = c.id
-                WHERE a.profile_id = @p::uuid
-                ORDER BY a.applied_date DESC LIMIT 5", new { p = result.ActiveProfileId });
+                WHERE s.job_role = (SELECT job_role FROM public.target_role_profiles WHERE id = @p::uuid)
+                AND a.user_id = @u
+                ORDER BY a.applied_date DESC LIMIT 5", new { p = result.ActiveProfileId, u = userId });
             
             result.ActiveProfileData.RecentApps = apps.ToList();
         }
@@ -205,40 +200,54 @@ public class DashboardService
         using var conn = new NpgsqlConnection(_connString);
         await conn.OpenAsync();
 
-        // 🚨 YOUR LOGIC EXACTLY AS REQUESTED:
-        var activeApps = await conn.ExecuteScalarAsync<int>(@"SELECT COUNT(1) FROM public.job_applications WHERE profile_id = @p::uuid AND status IN ('Pending', 'In Review')", new { p = profileId });
-        var activeInterviews = await conn.ExecuteScalarAsync<int>(@"SELECT COUNT(1) FROM public.call_for_interviews WHERE profile_id = @p::uuid", new { p = profileId });
+        // Get the role string to check the linked snapshots
+        var roleName = await conn.ExecuteScalarAsync<string>("SELECT job_role FROM public.target_role_profiles WHERE id = @p::uuid", new { p = profileId });
+
+        // ✅ FIX: All checks now correctly traverse through Snapshots and user_id
+        var activeApps = await conn.ExecuteScalarAsync<int>(@"
+            SELECT COUNT(1) FROM public.job_applications a 
+            JOIN public.application_snapshots s ON a.snapshot_id = s.id 
+            WHERE s.job_role = @role AND a.status IN ('Pending', 'In Review') AND a.user_id = @u", 
+            new { role = roleName, u = userId });
+
+        var activeInterviews = await conn.ExecuteScalarAsync<int>(@"
+            SELECT COUNT(1) FROM public.call_for_interviews c
+            JOIN public.job_applications a ON c.application_id = a.id
+            JOIN public.application_snapshots s ON a.snapshot_id = s.id
+            WHERE s.job_role = @role AND a.user_id = @u", 
+            new { role = roleName, u = userId });
 
         if (activeApps > 0 || activeInterviews > 0)
             return new DeletionResult { IsBlocked = true, Message = "You cannot remove this role because an application is currently processing under this job role." };
 
-        var hiredApps = await conn.ExecuteScalarAsync<int>(@"SELECT COUNT(1) FROM public.hired_records WHERE profile_id = @p::uuid", new { p = profileId });
+        var hiredApps = await conn.ExecuteScalarAsync<int>(@"
+            SELECT COUNT(1) FROM public.hired_records h
+            JOIN public.job_applications a ON h.application_id = a.id
+            JOIN public.application_snapshots s ON a.snapshot_id = s.id
+            WHERE s.job_role = @role AND a.user_id = @u", 
+            new { role = roleName, u = userId });
+            
         if (hiredApps > 0 && !isConfirmedByUser)
             return new DeletionResult { NeedsConfirmation = true, Message = "You have received job offers and achievements under this role. Do you really want to delete all these records?" };
 
-        var rejectApps = await conn.ExecuteScalarAsync<int>(@"SELECT COUNT(1) FROM public.reject_records WHERE profile_id = @p::uuid", new { p = profileId });
         var hasData = await conn.ExecuteScalarAsync<int>(@"SELECT COUNT(1) FROM public.target_role_profiles WHERE id = @p::uuid AND (about_me IS NOT NULL OR portfolio_url IS NOT NULL)", new { p = profileId });
         
-        if ((rejectApps > 0 || hasData > 0) && !isConfirmedByUser)
+        if (hasData > 0 && !isConfirmedByUser)
             return new DeletionResult { NeedsConfirmation = true, Message = "If you remove this job role, all tailored CV data added under it will be lost. Proceed?" };
 
         using var trans = await conn.BeginTransactionAsync();
         try 
         {
-            string[] tables = { "skill", "experience", "education", "project", "reject_records", "job_applications" };
+            // ✅ FIX: Removed 'reject_records' and 'job_applications' from this array! 
+            // Applications are tied to immutable snapshots. Deleting a profile should NOT delete application history!
+            string[] tables = { "skill", "experience", "education", "project", "publication", "certification", "membership", "language", "teaching_experience", "research_experience", "award", "volunteer" };
+            
             foreach (var table in tables) {
                 await conn.ExecuteAsync($"DELETE FROM public.\"{table}\" WHERE profile_id = @p::uuid", new { p = profileId }, trans);
             }
 
             await conn.ExecuteAsync("DELETE FROM public.target_role_profiles WHERE id = @p::uuid", new { p = profileId }, trans);
             
-            // Adjust the counters in the user table!
-            await conn.ExecuteAsync(@"
-                UPDATE public.""user"" SET 
-                rejected_jobs = GREATEST(0, rejected_jobs - @rejs),
-                applied_jobs = GREATEST(0, applied_jobs - @apps)
-                WHERE id = @u", new { u = userId, rejs = rejectApps, apps = activeApps }, trans);
-
             await trans.CommitAsync();
             return new DeletionResult { Success = true, Message = "Role removed successfully." };
         } 

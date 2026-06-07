@@ -14,7 +14,7 @@ public class ReadinessReport
 {
     public string JobRole { get; set; } = string.Empty;
     public string JobCategory { get; set; } = string.Empty;
-    public double IndustryTargetBenchmark { get; set; } // e.g., 64.5%
-    public double UserReadinessScore { get; set; }        // e.g., 42.1%
+    public double IndustryTargetBenchmark { get; set; } 
+    public double UserReadinessScore { get; set; }       
     public List<SkillCalculationDetail> Breakdown { get; set; } = new();
 }
