@@ -90,6 +90,10 @@ builder.Services.AddScoped<CVNetBackend.User_End.JobApply.Services.ApplicationSe
 builder.Services.AddScoped<CVNetBackend.Company_End.Services.CompanyProfileService>();
 builder.Services.AddScoped<CVNetBackend.Company_End.JobManagement.Services.CompanyJobService>();
 builder.Services.AddScoped<CVNetBackend.Company_End.ApplicationsView.Services.JobDetailsService>();
+builder.Services.AddScoped<CVNetBackend.Company_End.ApplicationsView.Services.JobDetailsService>();
+
+// Add this line right below it!
+builder.Services.AddScoped<CVNetBackend.Company_End.CandidateSection.Services.CandidateService>();
 
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();

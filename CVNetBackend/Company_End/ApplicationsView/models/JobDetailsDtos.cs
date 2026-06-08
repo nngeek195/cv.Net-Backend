@@ -48,6 +48,7 @@ public class ApplicantDto
     public string Email { get; set; } = string.Empty;
     public string Phone { get; set; } = string.Empty;
     public string Status { get; set; } = string.Empty;
+    public string? ProfileImageUrl { get; set; } // Added profile image mapping
     public int IndustryScore { get; set; }
     public int CompanyMatchScore { get; set; }
     public List<string> Skills { get; set; } = new();
@@ -70,20 +71,19 @@ public class FullApplicantProfileDto
     public string FullName { get; set; } = string.Empty;
     public string Email { get; set; } = string.Empty;
     public string? Phone { get; set; }
-
     public string? ProfileImageUrl { get; set; }
 
     public string JobRole { get; set; } = string.Empty;
     public string? CurrentOrg { get; set; }
     public string? CurrentPosition { get; set; }
 
-    // Scores from ApplicationSnapshot
     public int MatchScore { get; set; }
     public int IndustryScore { get; set; }
     public int CompanySkillMatchScore { get; set; }
 
     public string PersonalStatement { get; set; } = string.Empty;
     public string AboutMe { get; set; } = string.Empty;
+    public float? Gpa { get; set; }
 
     public string CvUrl { get; set; } = string.Empty;
     public string PortfolioUrl { get; set; } = string.Empty;
@@ -101,4 +101,17 @@ public class FullApplicantProfileDto
     public IEnumerable<dynamic> Awards { get; set; } = new List<dynamic>();
     public IEnumerable<dynamic> Volunteers { get; set; } = new List<dynamic>();
     public IEnumerable<dynamic> SocialLinks { get; set; } = new List<dynamic>();
+    
+}
+
+public class SocialLinkDto
+{
+    public string PlatformName { get; set; } = "";
+    public string ProfileUrl { get; set; } = "";
+}
+
+public class SnapshotSkillDto
+{
+    public string SkillName { get; set; } = "";
+    public string Level { get; set; } = "";
 }
