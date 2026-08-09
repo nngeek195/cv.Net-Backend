@@ -10,6 +10,7 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using CVNetBackend.JobRoleManager.Services;
 using CVNetBackend.User_End.JobApply.Services;
+using CVNetBackend.Company_End.CandidateSection.Services;
 
 // 0. LOAD ENVIRONMENT VARIABLES FIRST!
 // This MUST happen before WebApplication.CreateBuilder so the .NET framework 
@@ -31,7 +32,7 @@ else
 
 var builder = WebApplication.CreateBuilder(args);
 
-// --- CONFIGURE CORS ---
+// 1. CONFIGURE CORS
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("CVNetCorsPolicy", policy =>
@@ -43,7 +44,7 @@ builder.Services.AddCors(options =>
     });
 });
 
-// --- CONFIGURE JWT AUTHENTICATION (FIREBASE) ---
+// 2. CONFIGURE JWT AUTHENTICATION (FIREBASE)
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
     {
@@ -58,14 +59,14 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         };
     });
 
-// 3. RATE LIMITING
+// 3. RATE LIMITING (✅ Fixed Capacity)
 builder.Services.AddRateLimiter(options =>
 {
     options.AddFixedWindowLimiter("api-limiter", opt =>
     {
         opt.Window = TimeSpan.FromMinutes(1);
-        opt.PermitLimit = 5; 
-        opt.QueueLimit = 2;
+        opt.PermitLimit = 100; // Increased from 5 to prevent frontend dashboards from crashing
+        opt.QueueLimit = 10;
         opt.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
     });
 });
@@ -80,21 +81,23 @@ builder.Services.AddScoped<UserService>();
 builder.Services.AddScoped<DashboardService>();
 builder.Services.AddScoped<AdminService>();
 
+// Application & Candidate Services
+builder.Services.AddScoped<CVNetBackend.User_End.JobApply.Services.CandidateJobService>();
+builder.Services.AddScoped<CVNetBackend.User_End.JobApply.Services.ApplicationService>();
+
+// Company Services
+builder.Services.AddScoped<CVNetBackend.Company_End.JobManagement.Services.CompanyJobService>(); // ✅ Consolidated duplicate namespace
+builder.Services.AddScoped<CVNetBackend.Company_End.Services.CompanyProfileService>();
+builder.Services.AddScoped<CVNetBackend.Company_End.ApplicationsView.Services.JobDetailsService>(); // ✅ Removed duplicate registration
+builder.Services.AddScoped<CVNetBackend.Company_End.Interviews.Services.InterviewService>();
+builder.Services.AddScoped<CVNetBackend.Company_End.Services.CompanyDashboardService>();
+builder.Services.AddScoped<CandidateService>(); 
+
 
 // 💡 SINGLETON LIFETIMES: Safe for cross-cutting context providers or pure computational utilities
 builder.Services.AddSingleton<FirestoreService>();
 builder.Services.AddSingleton<EnhancerService>();
-builder.Services.AddScoped<CVNetBackend.Company_End.Services.CompanyJobService>();
-builder.Services.AddScoped<CVNetBackend.User_End.JobApply.Services.CandidateJobService>();
-builder.Services.AddScoped<CVNetBackend.User_End.JobApply.Services.ApplicationService>();
-builder.Services.AddScoped<CVNetBackend.Company_End.Services.CompanyProfileService>();
-builder.Services.AddScoped<CVNetBackend.Company_End.JobManagement.Services.CompanyJobService>();
-builder.Services.AddScoped<CVNetBackend.Company_End.ApplicationsView.Services.JobDetailsService>();
-builder.Services.AddScoped<CVNetBackend.Company_End.ApplicationsView.Services.JobDetailsService>();
-builder.Services.AddScoped<CVNetBackend.Company_End.Interviews.Services.InterviewService>();
-builder.Services.AddScoped<CVNetBackend.Company_End.Services.CompanyDashboardService>();
-// Add this line right below it!
-builder.Services.AddScoped<CVNetBackend.Company_End.CandidateSection.Services.CandidateService>();
+
 
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
@@ -108,7 +111,7 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
-// --- CRITICAL: MIDDLEWARE ORDER ---
+// 5. CRITICAL: MIDDLEWARE ORDER
 app.UseCors("CVNetCorsPolicy"); // 1. Allow access from Next.js
 app.UseAuthentication();        // 2. Verify the Token
 app.UseAuthorization();         // 3. Check Permissions

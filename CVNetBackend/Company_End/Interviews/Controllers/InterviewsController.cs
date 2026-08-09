@@ -89,19 +89,34 @@ public class InterviewsController : ControllerBase
 
     [HttpGet("shared/{portalId}/data")]
     [AllowAnonymous] 
-    public async Task<IActionResult> GetPortalData(string portalId, [FromHeader(Name = "X-Portal-PIN")] string pin)
-    {
-        try 
-        { 
-            // 🔒 Enforce PIN Header
-            if (string.IsNullOrEmpty(pin)) return Unauthorized(new { error = "Access PIN required." });
-            
-            var data = await _service.GetPortalDataAsync(portalId, pin);
-            return Ok(data); 
+public async Task<IActionResult> GetPortalData(string portalId, [FromHeader(Name = "X-Portal-PIN")] string pin)
+{
+    Console.WriteLine($"\n[DEBUG - CONTROLLER] Request received for Portal: {portalId}");
+    Console.WriteLine($"[DEBUG - CONTROLLER] X-Portal-PIN Header provided: {!string.IsNullOrEmpty(pin)}");
+
+    try 
+    { 
+        if (string.IsNullOrEmpty(pin)) 
+        {
+            Console.WriteLine("[DEBUG - CONTROLLER] 🚨 Missing PIN Header!");
+            return Unauthorized(new { error = "Access PIN required." });
         }
-        catch (UnauthorizedAccessException ex) { return Unauthorized(new { error = ex.Message }); }
-        catch (Exception ex) { return StatusCode(500, new { error = ex.Message }); }
+        
+        var data = await _service.GetPortalDataAsync(portalId, pin);
+        Console.WriteLine($"[DEBUG - CONTROLLER] Returning OK with {data.Count()} job groups.");
+        return Ok(data); 
     }
+    catch (UnauthorizedAccessException ex) 
+    { 
+        Console.WriteLine($"[DEBUG - CONTROLLER] 🚨 Unauthorized: {ex.Message}");
+        return Unauthorized(new { error = ex.Message }); 
+    }
+    catch (Exception ex) 
+    { 
+        Console.WriteLine($"[DEBUG - CONTROLLER] 🚨 Fatal Error: {ex.Message}");
+        return StatusCode(500, new { error = ex.Message }); 
+    }
+}
 
     [HttpGet("shared/{portalId}/applicant/{appId}")]
     [AllowAnonymous] 
