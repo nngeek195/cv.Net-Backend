@@ -15,13 +15,18 @@ from fill_with_Linkedinn.linkedin_service import get_linkedin_data, map_linkedin
 from fill_with_Linkedinn.linkedin_data_handler import LinkedInDataHandler
 
 app = FastAPI()
+
+# ✅ FIXED CORS MIDDLEWARE
+# Using allow_origin_regex allows any origin (localhost, EC2 IP, Vercel) 
+# while keeping allow_credentials=True valid for the browser!
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Allows all origins (safe for local development)
+    allow_origin_regex=".*",
     allow_credentials=True,
-    allow_methods=["*"],  # Allows all methods including OPTIONS, POST, GET
+    allow_methods=["*"],
     allow_headers=["*"],
 )
+
 handler = PDFDataHandler()
 
 PDF_DIR = "pdfs"
@@ -126,7 +131,6 @@ async def sync_linkedin(user_id: str = Form(...), profile_url: str = Form(...)):
     print(f"\n--- STARTING LINKEDIN SYNC ---")
     print(f"User ID: {user_id}")
     
-    # ✅ FIX 1: Clean the URL! Piloterr often crashes if there is a trailing slash or tracking parameters.
     clean_url = profile_url.split('?')[0].rstrip('/')
     print(f"Target URL: {clean_url}")
     
@@ -135,7 +139,6 @@ async def sync_linkedin(user_id: str = Form(...), profile_url: str = Form(...)):
         try:
             raw_data = get_linkedin_data(clean_url)
         except requests.exceptions.HTTPError as http_err:
-            # ✅ FIX 2: Gracefully catch Piloterr server crashes
             print(f"❌ PILOTERR API CRASHED: {http_err}")
             raise HTTPException(status_code=502, detail="Piloterr is currently blocked by LinkedIn or unavailable. Please try again later.")
         except Exception as api_err:
@@ -167,12 +170,11 @@ async def sync_linkedin(user_id: str = Form(...), profile_url: str = Form(...)):
         return {"status": "success", "message": "LinkedIn Merged", "data": structured_data}
         
     except HTTPException as he:
-        # Re-raise HTTP exceptions so FastAPI handles them correctly
         raise he
     except Exception as e:
         print(f"🔥 CRITICAL EXCEPTION CAUGHT IN MAIN: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
-# --- START THE ENGINE ---
+
 if __name__ == "__main__":
     print("📡 CV.net Unified Engine running on http://localhost:8000")
     uvicorn.run(app, host="0.0.0.0", port=8000)

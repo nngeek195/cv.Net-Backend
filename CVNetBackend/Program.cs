@@ -12,9 +12,6 @@ using CVNetBackend.JobRoleManager.Services;
 using CVNetBackend.User_End.JobApply.Services;
 using CVNetBackend.Company_End.CandidateSection.Services;
 
-// 0. LOAD ENVIRONMENT VARIABLES FIRST!
-// This MUST happen before WebApplication.CreateBuilder so the .NET framework 
-// configuration engine caches your .env variables on startup.
 DotEnv.Load();
 
 var root = Directory.GetCurrentDirectory();
@@ -32,12 +29,12 @@ else
 
 var builder = WebApplication.CreateBuilder(args);
 
-// 1. CONFIGURE CORS
+// 1. ✅ DYNAMIC CORS CONFIGURATION
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("CVNetCorsPolicy", policy =>
     {
-        policy.WithOrigins("http://localhost:3000") // Your Next.js local URL
+        policy.SetIsOriginAllowed(origin => true) // Allows localhost, 10.x.x.x IPs, EC2 IPs, Vercel
               .AllowAnyHeader()
               .AllowAnyMethod()
               .AllowCredentials();
@@ -59,21 +56,19 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         };
     });
 
-// 3. RATE LIMITING (✅ Fixed Capacity)
+// 3. RATE LIMITING
 builder.Services.AddRateLimiter(options =>
 {
     options.AddFixedWindowLimiter("api-limiter", opt =>
     {
         opt.Window = TimeSpan.FromMinutes(1);
-        opt.PermitLimit = 100; // Increased from 5 to prevent frontend dashboards from crashing
+        opt.PermitLimit = 100;
         opt.QueueLimit = 10;
         opt.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
     });
 });
 
 // 4. REGISTER SERVICES
-
-// 💡 SCOPED LIFETIMES: Required for anything executing isolated database tasks per-request
 builder.Services.AddScoped<DatabaseService>();     
 builder.Services.AddScoped<ProfileService>();      
 builder.Services.AddScoped<SkillMatrixEngine>();   
@@ -81,23 +76,18 @@ builder.Services.AddScoped<UserService>();
 builder.Services.AddScoped<DashboardService>();
 builder.Services.AddScoped<AdminService>();
 
-// Application & Candidate Services
 builder.Services.AddScoped<CVNetBackend.User_End.JobApply.Services.CandidateJobService>();
 builder.Services.AddScoped<CVNetBackend.User_End.JobApply.Services.ApplicationService>();
 
-// Company Services
-builder.Services.AddScoped<CVNetBackend.Company_End.JobManagement.Services.CompanyJobService>(); // ✅ Consolidated duplicate namespace
+builder.Services.AddScoped<CVNetBackend.Company_End.JobManagement.Services.CompanyJobService>();
 builder.Services.AddScoped<CVNetBackend.Company_End.Services.CompanyProfileService>();
-builder.Services.AddScoped<CVNetBackend.Company_End.ApplicationsView.Services.JobDetailsService>(); // ✅ Removed duplicate registration
+builder.Services.AddScoped<CVNetBackend.Company_End.ApplicationsView.Services.JobDetailsService>();
 builder.Services.AddScoped<CVNetBackend.Company_End.Interviews.Services.InterviewService>();
 builder.Services.AddScoped<CVNetBackend.Company_End.Services.CompanyDashboardService>();
 builder.Services.AddScoped<CandidateService>(); 
-builder.Services.AddScoped<CVNetBackend.Company_End.Services.CompanyJobService>();
 
-// 💡 SINGLETON LIFETIMES: Safe for cross-cutting context providers or pure computational utilities
 builder.Services.AddSingleton<FirestoreService>();
 builder.Services.AddSingleton<EnhancerService>();
-
 
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
@@ -111,9 +101,10 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
-// 5. CRITICAL: MIDDLEWARE ORDER
-app.UseCors("CVNetCorsPolicy"); // 1. Allow access from Next.js
-app.UseAuthentication();        // 2. Verify the Token
+// 5. CRITICAL: MIDDLEWARE PIPELINE ORDER
+app.UseRouting();               // Ensure routing context is initialized first
+app.UseCors("CVNetCorsPolicy"); // 1. Pass CORS check
+app.UseAuthentication();        // 2. Verify Firebase JWT Token
 app.UseAuthorization();         // 3. Check Permissions
 
 app.MapControllers().RequireRateLimiting("api-limiter");

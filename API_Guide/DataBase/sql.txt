@@ -9,7 +9,7 @@ add or change DB with schema.gql: firebase deploy --only dataconnect
 
 
 
-set device ip: gcloud sql instances patch cvnet2026-capstone-instance --authorized-networks=212.104.224.248/32
+set device ip: gcloud sql instances patch cvnet2026-capstone-instance --authorized-networks=32.192.224.19/32
 
 
 gcloud sql users set-password postgres \
