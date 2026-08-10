@@ -2,6 +2,7 @@ import os
 import psycopg2
 from psycopg2.extras import execute_values
 import logging
+from datetime import datetime # ✅ ADDED IMPORT
 
 class LinkedInDataHandler:
     def __init__(self):
@@ -50,6 +51,33 @@ class LinkedInDataHandler:
             """, (u.get('portfolioUrl'), u.get('currentOrg'), u.get('currentPosition'), 
                   u.get('personalStatement'), u.get('aboutMe'), profile_id))
 
+            # =========================================================================
+            # ✅ DATE SANITIZATION HELPER
+            # =========================================================================
+            def sanitize_date(val, is_required=False):
+                default_date = '1900-01-01' if is_required else None
+                if not val or str(val).strip() == "":
+                    return default_date
+                    
+                date_str = str(val).strip()
+                if date_str.lower() in ["present", "current", "ongoing", "now", "null"]:
+                    return None
+
+                for fmt in ("%b %Y", "%B %Y", "%m/%Y", "%Y-%m", "%Y"):
+                    try:
+                        dt = datetime.strptime(date_str, fmt)
+                        return dt.strftime("%Y-%m-01")
+                    except ValueError:
+                        continue
+                        
+                try:
+                    dt = datetime.fromisoformat(date_str.replace('Z', '+00:00'))
+                    return dt.strftime("%Y-%m-%d")
+                except ValueError:
+                    pass
+                    
+                return default_date
+
             # --- 2. UNIQUE RECORD APPEND CONTROLLER ---
             def merge_unique(table, check_col, data_key, cols, mapping):
                 items = data.get(data_key, [])
@@ -73,9 +101,9 @@ class LinkedInDataHandler:
 
             # --- 3. EXECUTE ALL 13 RELATIONAL ARRAYS ---
             merge_unique("skill", "skill_name", "skills", ["profile_id", "skill_name", "level"], lambda x: (profile_id, x.get('skillName'), x.get('level') or "Beginner"))
-            merge_unique("experience", "company_name", "experience", ["profile_id", "company_name", "start_date", "end_date", "role_description"], lambda x: (profile_id, x.get('companyName'), x.get('startDate') or '1900-01-01', x.get('endDate'), x.get('roleDescription') or ""))
-            merge_unique("education", "degree_title", "education", ["profile_id", "degree_title", "field_of_study", "organization", "start_date", "end_date"], lambda x: (profile_id, x.get('degreeTitle'), x.get('fieldOfStudy') or "", x.get('organization'), x.get('startDate') or '1900-01-01', x.get('endDate') or '1900-01-01'))
-            merge_unique("certification", "field", "certifications", ["profile_id", "organization", "field", "issue_date"], lambda x: (profile_id, x.get('organization') or "", x.get('field'), x.get('issueDate') or '1900-01-01'))
+            merge_unique("experience", "company_name", "experience", ["profile_id", "company_name", "start_date", "end_date", "role_description"], lambda x: (profile_id, x.get('companyName'), sanitize_date(x.get('startDate'), True), sanitize_date(x.get('endDate'), False), x.get('roleDescription') or ""))
+            merge_unique("education", "degree_title", "education", ["profile_id", "degree_title", "field_of_study", "organization", "start_date", "end_date"], lambda x: (profile_id, x.get('degreeTitle'), x.get('fieldOfStudy') or "", x.get('organization'), sanitize_date(x.get('startDate'), True), sanitize_date(x.get('endDate'), True)))
+            merge_unique("certification", "field", "certifications", ["profile_id", "organization", "field", "issue_date"], lambda x: (profile_id, x.get('organization') or "", x.get('field'), sanitize_date(x.get('issueDate'), True)))
             merge_unique("award", "award_name", "awards", ["profile_id", "award_name", "organization", "description"], lambda x: (profile_id, x.get('awardName'), x.get('organization') or "", x.get('description') or ""))
             merge_unique("project", "name", "projects", ["profile_id", "name", "description", "time_period", "role", "organization", "source_link"], lambda x: (profile_id, x.get('name'), x.get('description') or "", x.get('timePeriod') or "", x.get('role') or "", x.get('organization') or "", x.get('sourceLink') or ""))
             merge_unique("publication", "title", "publications", ["profile_id", "title", "description", "source_link", "organization", "year"], lambda x: (profile_id, x.get('title'), x.get('description') or "", x.get('sourceLink') or "", x.get('organization') or "", x.get('year') or 0))

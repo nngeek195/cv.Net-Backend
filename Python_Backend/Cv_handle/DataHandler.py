@@ -3,6 +3,7 @@ import uuid
 import psycopg2
 from psycopg2.extras import execute_values
 import logging
+from datetime import datetime # ✅ ADDED IMPORT
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -71,12 +72,30 @@ class DataHandler:
 
             # =========================================================================
             # ✅ BULLETPROOF TYPE CASTING HELPERS
-            # Prevents AI-generated "" (empty strings) from crashing Postgres dates/ints
             # =========================================================================
-            def safe_date(val, is_required=False):
+            def sanitize_date(val, is_required=False):
+                default_date = '1900-01-01' if is_required else None
                 if not val or str(val).strip() == "":
-                    return '1900-01-01' if is_required else None
-                return val
+                    return default_date
+                    
+                date_str = str(val).strip()
+                if date_str.lower() in ["present", "current", "ongoing", "now", "null"]:
+                    return None
+
+                for fmt in ("%b %Y", "%B %Y", "%m/%Y", "%Y-%m", "%Y"):
+                    try:
+                        dt = datetime.strptime(date_str, fmt)
+                        return dt.strftime("%Y-%m-01")
+                    except ValueError:
+                        continue
+                        
+                try:
+                    dt = datetime.fromisoformat(date_str.replace('Z', '+00:00'))
+                    return dt.strftime("%Y-%m-%d")
+                except ValueError:
+                    pass
+                    
+                return default_date
 
             def safe_int(val):
                 if not val or str(val).strip() == "":
@@ -101,21 +120,18 @@ class DataHandler:
             sync_table("social_link", ["profile_id", "platform_name", "profile_url"], "socialLinks", lambda x: (profile_id, x.get('platformName') or "", x.get('profileUrl') or ""))
             sync_table("skill", ["profile_id", "skill_name", "level"], "skills", lambda x: (profile_id, x.get('skillName') or "", x.get('level') or "Beginner"))
             
-            # ✅ Applied safe_date to Experience
-            sync_table("experience", ["profile_id", "company_name", "start_date", "end_date", "role_description"], "experience", lambda x: (profile_id, x.get('companyName') or "", safe_date(x.get('startDate'), True), safe_date(x.get('endDate'), False), x.get('roleDescription') or ""))
+            # ✅ Now using sanitize_date for robust parsing
+            sync_table("experience", ["profile_id", "company_name", "start_date", "end_date", "role_description"], "experience", lambda x: (profile_id, x.get('companyName') or "", sanitize_date(x.get('startDate'), True), sanitize_date(x.get('endDate'), False), x.get('roleDescription') or ""))
             
-            # ✅ Applied safe_date to Education
-            sync_table("education", ["profile_id", "degree_title", "field_of_study", "organization", "start_date", "end_date", "honors", "thesis_title", "relevant_coursework"], "education", lambda x: (profile_id, x.get('degreeTitle') or "", x.get('fieldOfStudy') or "", x.get('organization') or "", safe_date(x.get('startDate'), True), safe_date(x.get('endDate'), True), x.get('honors') or "", x.get('thesisTitle') or "", x.get('relevantCoursework') or ""))
+            sync_table("education", ["profile_id", "degree_title", "field_of_study", "organization", "start_date", "end_date", "honors", "thesis_title", "relevant_coursework"], "education", lambda x: (profile_id, x.get('degreeTitle') or "", x.get('fieldOfStudy') or "", x.get('organization') or "", sanitize_date(x.get('startDate'), True), sanitize_date(x.get('endDate'), True), x.get('honors') or "", x.get('thesisTitle') or "", x.get('relevantCoursework') or ""))
             
             sync_table("project", ["profile_id", "name", "description", "time_period", "role", "organization", "source_link"], "projects", lambda x: (profile_id, x.get('name') or "", x.get('description') or "", x.get('timePeriod') or "", x.get('role') or "", x.get('organization') or "", x.get('sourceLink') or ""))
             
-            # ✅ Applied safe_date to Certifications
-            sync_table("certification", ["profile_id", "organization", "field", "issue_date"], "certifications", lambda x: (profile_id, x.get('organization') or "", x.get('field') or "", safe_date(x.get('issueDate'), True)))
+            sync_table("certification", ["profile_id", "organization", "field", "issue_date"], "certifications", lambda x: (profile_id, x.get('organization') or "", x.get('field') or "", sanitize_date(x.get('issueDate'), True)))
             
             sync_table("membership", ["profile_id", "organization_name"], "memberships", lambda x: (profile_id, x.get('organizationName') or ""))
             sync_table("language", ["profile_id", "language_name", "proficiency"], "languages", lambda x: (profile_id, x.get('languageName') or "", x.get('proficiency') or "Beginner"))
             
-            # ✅ Applied safe_int to Publications
             sync_table("publication", ["profile_id", "title", "description", "source_link", "organization", "year"], "publications", lambda x: (profile_id, x.get('title') or "", x.get('description') or "", x.get('sourceLink') or "", x.get('organization') or "", safe_int(x.get('year'))))
             
             sync_table("teaching_experience", ["profile_id", "courses_taught", "organization", "time_period", "curriculum_description"], "teachingExperience", lambda x: (profile_id, x.get('coursesTaught') or "", x.get('organization') or "", x.get('timePeriod') or "", x.get('curriculumDescription') or ""))

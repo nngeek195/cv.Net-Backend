@@ -92,7 +92,7 @@ builder.Services.AddScoped<CVNetBackend.Company_End.ApplicationsView.Services.Jo
 builder.Services.AddScoped<CVNetBackend.Company_End.Interviews.Services.InterviewService>();
 builder.Services.AddScoped<CVNetBackend.Company_End.Services.CompanyDashboardService>();
 builder.Services.AddScoped<CandidateService>(); 
-
+builder.Services.AddScoped<CVNetBackend.Company_End.Services.CompanyJobService>();
 
 // 💡 SINGLETON LIFETIMES: Safe for cross-cutting context providers or pure computational utilities
 builder.Services.AddSingleton<FirestoreService>();

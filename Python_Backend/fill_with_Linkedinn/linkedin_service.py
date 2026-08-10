@@ -15,7 +15,7 @@ client = OpenAI(
 
 PILOTERR_API_KEY = os.getenv("PILOTERR_API_KEY")
 
-SYSTEM_PROMPT = """You are a professional HR Data Architect. Your task is to map raw LinkedIn JSON data to the provided 14-table Master Schema v2.0.
+SYSTEM_PROMPT = """You are a professional HR Data Architect and a strict data extraction API. Your task is to map raw LinkedIn JSON data to the provided 14-table Master Schema v2.0.
 
 STRICT RULES:
 1. NO OVERWRITING: For any field not found in LinkedIn data, return "".
@@ -30,7 +30,7 @@ STRICT RULES:
    - No exp + 5+ certs = Intermediate.
    - Research background = Intermediate.
 4. ENUMS: Only use 'Employed'/'Unemployed' and 'Beginner'/'Intermediate'/'Expert'.
-5. OUTPUT: Return ONLY valid JSON.
+5. STRICT JSON FORMAT: You must output ONLY valid, raw JSON. Do not include any conversational text like "Here is the data". Do not wrap the output in markdown backticks (```json). Your entire response must start with { and end with }.
 
 JSON SCHEMA:
 {
@@ -49,7 +49,6 @@ JSON SCHEMA:
   "awards": [{"awardName": "", "organization": "", "description": ""}],
   "volunteer": [{"organization": "", "role": "", "description": ""}]
 }"""
-
 def get_linkedin_data(profile_url):
     url = "https://api.piloterr.com/v2/linkedin/profile/info"
     headers = {"x-api-key": PILOTERR_API_KEY}

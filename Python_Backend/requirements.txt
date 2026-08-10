@@ -1,0 +1,9 @@
+pdfplumber
+psycopg2-binary
+fastapi
+pydantic
+requests
+openai
+python-dotenv
+uvicorn
+python-multipart

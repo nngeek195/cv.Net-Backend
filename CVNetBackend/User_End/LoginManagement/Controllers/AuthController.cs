@@ -64,39 +64,59 @@ public class AuthController : ControllerBase
     [HttpPost("login")]
     public async Task<IActionResult> Login([FromBody] TokenAuthRequest request)
     {
+        Console.WriteLine("\n==================================================");
+        Console.WriteLine("🛡️ [DEBUG-BACKEND] /api/Auth/login endpoint hit!");
+        
+        if (request == null || string.IsNullOrEmpty(request.IdToken)) 
+        {
+            Console.WriteLine("❌ [DEBUG-BACKEND] Request body or IdToken is missing!");
+            return BadRequest(new { error = "Invalid request payload." });
+        }
+        
+        Console.WriteLine($"[DEBUG-BACKEND] Token received snippet: {request.IdToken.Substring(0, Math.Min(15, request.IdToken.Length))}...");
+
         try
         {
+            Console.WriteLine("[DEBUG-BACKEND] Attempting to verify token with Firebase Admin SDK...");
             FirebaseToken decodedToken = await FirebaseAuth.DefaultInstance.VerifyIdTokenAsync(request.IdToken);
             string uid = decodedToken.Uid;
+            
+            Console.WriteLine($"✅ [DEBUG-BACKEND] Token verified successfully! UID: {uid}");
             
             string email = decodedToken.Claims.ContainsKey("email") 
                 ? decodedToken.Claims["email"]?.ToString() ?? "" 
                 : "";
             
-            // Google gives us the Full Name in a single string
             string name = decodedToken.Claims.ContainsKey("name") 
                 ? decodedToken.Claims["name"]?.ToString() ?? "CV User" 
                 : "CV User";
 
-            // 1. Split the Google Full Name for Firestore (NoSQL)
             var parts = name.Trim().Split(' ');
             string firstName = parts[0];
             string lastName = parts.Length > 1 ? string.Join(" ", parts.Skip(1)) : "";
 
+            Console.WriteLine("[DEBUG-BACKEND] Syncing user to Firestore and Postgres...");
             await _fs.UpsertUserDocument(uid, firstName, lastName, email);
-
-            // 2. Keep the Google Full Name intact for PostgreSQL (SQL)
             await _db.UpsertUserToPostgres(uid, email, name, "Agreed");
 
+            Console.WriteLine("✅ [DEBUG-BACKEND] Login and Sync Complete!");
             return Ok(new { 
                 message = "Login and Sync Successful!", 
                 uid = uid,
                 email = email
             });
         }
+        catch (FirebaseAuthException authEx)
+        {
+            Console.WriteLine($"\n❌ [DEBUG-BACKEND] FIREBASE AUTH REJECTION: {authEx.Message}");
+            Console.WriteLine($"❌ [DEBUG-BACKEND] Auth Error Reason: {authEx.AuthErrorCode}\n");
+            return Unauthorized(new { error = "Firebase token verification failed", details = authEx.Message });
+        }
         catch (Exception ex)
         {
-            return Unauthorized(new { error = "Authentication failed", details = ex.Message });
+            Console.WriteLine($"\n❌ [DEBUG-BACKEND] GENERAL SYSTEM ERROR: {ex.Message}");
+            Console.WriteLine($"❌ [DEBUG-BACKEND] Stack Trace: {ex.StackTrace}\n");
+            return StatusCode(500, new { error = "Internal server error during login", details = ex.Message });
         }
     }
 }
