@@ -60,14 +60,13 @@ def get_linkedin_data(profile_url):
 def map_linkedin_to_schema(raw_data):
     try:
         response = client.chat.completions.create(
-            # 2. Swap to the lightning-fast 8B model
             model="meta/llama-3.1-8b-instruct", 
             messages=[
                 {"role": "system", "content": SYSTEM_PROMPT},
                 {"role": "user", "content": f"Map this LinkedIn data:\n\n{json.dumps(raw_data)}"}
             ],
             temperature=0,
-            max_tokens=2048 # Ensure the model has enough room to write the full JSON
+            max_tokens=2048
         )
         
         raw_content = response.choices[0].message.content

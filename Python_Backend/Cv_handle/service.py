@@ -4,12 +4,11 @@ import re
 from openai import OpenAI, APITimeoutError, APIConnectionError
 from dotenv import load_dotenv
 
-# Force load variables
 load_dotenv()
 
 api_key = os.getenv("XAIAPI")
 print(f"🔑 [DEBUG AI INIT] Loaded xAI Key: {'YES (Starts with ' + api_key[:5] + '...)' if api_key else 'NO (None)'}")
-# ✅ FIX 1: Increased timeout to 90 seconds to allow massive CV processing
+# Allow enough time for large CVs.
 client = OpenAI(
     base_url="https://ws-lzb562t9qzsctifi.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1",
     api_key=api_key,
@@ -63,7 +62,6 @@ def map_cv_to_schema(cv_text):
         print("🧠 [DEBUG AI] Preparing request to Qwen API (qwen3.7-flash)...")
         
         response = client.chat.completions.create(
-            # ✅ Switched to Grok
             model="qwen3.7-flash", 
             messages=[
                 {"role": "system", "content": SYSTEM_PROMPT},
@@ -77,7 +75,7 @@ def map_cv_to_schema(cv_text):
         
         print(f"🧠 [DEBUG AI] Raw Response Snippet: {raw_content[:150]}...")
         
-        # Clean potential markdown fences
+        # Strip markdown fences if the model adds them.
         clean_json = re.sub(r"```json| ```", "", raw_content).strip()
         return json.loads(clean_json)
         

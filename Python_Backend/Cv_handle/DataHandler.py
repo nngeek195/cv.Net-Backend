@@ -3,7 +3,7 @@ import uuid
 import psycopg2
 from psycopg2.extras import execute_values
 import logging
-from datetime import datetime # ✅ ADDED IMPORT
+from datetime import datetime
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -24,7 +24,7 @@ class DataHandler:
             conn = psycopg2.connect(**self.conn_params)
             cur = conn.cursor()
 
-            # --- 1. DETERMINE OR CREATE TARGET ROLE PROFILE ---
+            # Create a target profile if the user does not have one yet.
             cur.execute('SELECT default_profile_id FROM public."user" WHERE id = %s', (user_id,))
             row = cur.fetchone()
             
@@ -45,7 +45,7 @@ class DataHandler:
                 
                 cur.execute('UPDATE public."user" SET default_profile_id = %s WHERE id = %s', (profile_id, user_id))
 
-            # --- 2. CORE USER UPDATE ---
+            # Update the core user record.
             u = data.get('user', {})
             gpa_val = None
             try:
@@ -58,7 +58,7 @@ class DataHandler:
                 WHERE id = %s
             """, (u.get('phone') or "", u.get('address') or "", u.get('employmentStatus') or "Unemployed", gpa_val, user_id))
 
-            # --- 3. TARGET ROLE PROFILE UPDATE ---
+            # Update the profile-level CV fields.
             p = data.get('profile', {}) or u
             cv_link = data.get('cvUrl') or p.get('cvUrl') or ""
             
@@ -70,9 +70,7 @@ class DataHandler:
             """, (p.get('portfolioUrl') or "", p.get('currentOrg') or "", p.get('currentPosition') or "",
                   p.get('personalStatement') or "", p.get('aboutMe') or "", cv_link, profile_id))
 
-            # =========================================================================
-            # ✅ BULLETPROOF TYPE CASTING HELPERS
-            # =========================================================================
+            # Normalize dates and integers before writing relational tables.
             def sanitize_date(val, is_required=False):
                 default_date = '1900-01-01' if is_required else None
                 if not val or str(val).strip() == "":
@@ -105,7 +103,7 @@ class DataHandler:
                 except ValueError:
                     return 0
 
-            # --- 4. RELATIONAL DATA BULK SYNC HELPER ---
+            # Replace each relational table with the latest extracted data.
             def sync_table(table_name, columns, data_key, mapping_func):
                 items = data.get(data_key, [])
                 cur.execute(f'DELETE FROM public."{table_name}" WHERE profile_id = %s', (profile_id,))
@@ -116,11 +114,9 @@ class DataHandler:
                     execute_values(cur, f'INSERT INTO public."{table_name}" ({col_str}) VALUES %s', 
                                    [v + ('now', 'now') for v in vals])
 
-            # --- 5. EXECUTE BULK DATA RENDER ACTIONS ---
             sync_table("social_link", ["profile_id", "platform_name", "profile_url"], "socialLinks", lambda x: (profile_id, x.get('platformName') or "", x.get('profileUrl') or ""))
             sync_table("skill", ["profile_id", "skill_name", "level"], "skills", lambda x: (profile_id, x.get('skillName') or "", x.get('level') or "Beginner"))
             
-            # ✅ Now using sanitize_date for robust parsing
             sync_table("experience", ["profile_id", "company_name", "start_date", "end_date", "role_description"], "experience", lambda x: (profile_id, x.get('companyName') or "", sanitize_date(x.get('startDate'), True), sanitize_date(x.get('endDate'), False), x.get('roleDescription') or ""))
             
             sync_table("education", ["profile_id", "degree_title", "field_of_study", "organization", "start_date", "end_date", "honors", "thesis_title", "relevant_coursework"], "education", lambda x: (profile_id, x.get('degreeTitle') or "", x.get('fieldOfStudy') or "", x.get('organization') or "", sanitize_date(x.get('startDate'), True), sanitize_date(x.get('endDate'), True), x.get('honors') or "", x.get('thesisTitle') or "", x.get('relevantCoursework') or ""))

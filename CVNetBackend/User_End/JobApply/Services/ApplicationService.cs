@@ -58,14 +58,13 @@ public class ApplicationService
         };
     }
 
-    // ✅ NEW: Fetches the frozen snapshot data for a specific application
     public async Task<object> GetApplicationByIdAsync(string appId, string userId)
     {
         using var conn = new NpgsqlConnection(_connString);
         await conn.OpenAsync();
 
-        // 1. Get the core application, user, and main snapshot info
-var mainData = await conn.QueryFirstOrDefaultAsync<dynamic>(@"
+        // Load the application header and snapshot metadata.
+        var mainData = await conn.QueryFirstOrDefaultAsync<dynamic>(@"
             SELECT 
                 a.id::text as ""appId"",
                 to_char(a.applied_date, 'YYYY-MM-DD') as ""appliedDate"",
@@ -74,7 +73,7 @@ var mainData = await conn.QueryFirstOrDefaultAsync<dynamic>(@"
                 u.email as ""email"",
                 u.phone as ""phone"",
                 u.address as ""address"",
-                u.profile_image_url as ""profileImageUrl"",  /* ✅ ADDED THIS LINE */
+                u.profile_image_url as ""profileImageUrl"",
                 s.id::text as ""snapshotId"",
                 s.job_role as ""jobRole"",
                 s.personal_statement as ""personalStatement"",
@@ -92,7 +91,7 @@ var mainData = await conn.QueryFirstOrDefaultAsync<dynamic>(@"
 
         string snapId = mainData.snapshotId;
 
-        // 2. Fetch the frozen arrays linked to the snapshot
+        // Load the frozen relational arrays linked to the snapshot.
         var skills = await conn.QueryAsync(@"
             SELECT skill_name as ""skillName"", level 
             FROM public.snapshot_skills WHERE snapshot_id = @snapId::uuid", new { snapId });
@@ -107,7 +106,6 @@ var mainData = await conn.QueryFirstOrDefaultAsync<dynamic>(@"
                    organization as ""organization"", to_char(start_date, 'YYYY') as ""year"" 
             FROM public.snapshot_education WHERE snapshot_id = @snapId::uuid", new { snapId });
 
-        // 3. Construct the JSON structure the frontend expects
         return new {
             id = mainData.appId,
             appliedDate = mainData.appliedDate,
@@ -168,7 +166,6 @@ var mainData = await conn.QueryFirstOrDefaultAsync<dynamic>(@"
 
                 totalRequiredPoints += reqWeight;
 
-                // Find if user submitted this skill (case-insensitive)
                 var uSkill = userSkills.FirstOrDefault(s => 
                     s.TryGetValue("skillName", out var n) && 
                     n.Equals(jsName, StringComparison.OrdinalIgnoreCase));
@@ -179,7 +176,6 @@ var mainData = await conn.QueryFirstOrDefaultAsync<dynamic>(@"
                     userWeight = GetSkillWeight(uLevel);
                 }
 
-                // Cap the earned points
                 earnedPoints += Math.Min(userWeight, reqWeight);
             }
 
@@ -187,9 +183,7 @@ var mainData = await conn.QueryFirstOrDefaultAsync<dynamic>(@"
                 ? (int)Math.Round((earnedPoints / totalRequiredPoints) * 100) 
                 : 0;
 
-            // =========================================================================
-            // 1. Insert Main Application Snapshot Data (Including the calculated score)
-            // =========================================================================
+            // Save the immutable snapshot used by the application.
             string snapSql = @"
                 INSERT INTO public.application_snapshots 
                 (id, job_role, portfolio_url, personal_statement, about_me, cv_url, match_score, industry_score, company_skill_match_score, created_at)
@@ -206,10 +200,9 @@ var mainData = await conn.QueryFirstOrDefaultAsync<dynamic>(@"
                 cvUrl = dto.CvUrl,
                 matchScore = dto.MatchScore, 
                 industryScore = dto.IndustryScore,
-                companyMatchScore = calculatedCompanyScore // ✅ Saved from backend calculation
+                companyMatchScore = calculatedCompanyScore
             }, trans);
 
-            // 2. Insert Frontend-Edited Skills
             if (userSkills.Count > 0) {
                 foreach(var s in userSkills) {
                     await conn.ExecuteAsync(@"INSERT INTO public.snapshot_skills (snapshot_id, skill_name, level) VALUES (@snapId, @name, @lvl)", 
@@ -217,7 +210,6 @@ var mainData = await conn.QueryFirstOrDefaultAsync<dynamic>(@"
                 }
             }
 
-            // 3. Insert Frontend-Edited Experience
             var experience = JsonSerializer.Deserialize<List<Dictionary<string, string>>>(dto.ExperienceJson);
             if (experience != null) {
                 foreach(var e in experience) {
@@ -227,9 +219,7 @@ var mainData = await conn.QueryFirstOrDefaultAsync<dynamic>(@"
                 }
             }
 
-            // =========================================================================
-            // 4. CLONE THE REST OF THE PROFILE DIRECTLY FROM THE DATABASE
-            // =========================================================================
+            // Clone the remaining profile data into the snapshot tables.
             if (!string.IsNullOrEmpty(dto.ProfileId))
             {
                 var pId = new { snapId = snapshotId, profileId = dto.ProfileId };
@@ -272,7 +262,7 @@ var mainData = await conn.QueryFirstOrDefaultAsync<dynamic>(@"
                     WHERE r.profile_id = @profileId::uuid", pId, trans);
             }
 
-            // 5. Create Job Application Record
+            // Create the application row.
             string appSql = @"
                 INSERT INTO public.job_applications 
                 (id, user_id, snapshot_id, job_id, cover_letter, applied_date, status)
@@ -284,7 +274,7 @@ var mainData = await conn.QueryFirstOrDefaultAsync<dynamic>(@"
                 jobId = dto.JobId, coverLetter = dto.CoverLetter
             }, trans);
 
-            // 6. Update user statistics
+            // Update the user's application count.
             await conn.ExecuteAsync("UPDATE public.\"user\" SET applied_jobs = COALESCE(applied_jobs, 0) + 1 WHERE id = @userId", new { userId }, trans);
 
             await trans.CommitAsync();
@@ -296,7 +286,6 @@ var mainData = await conn.QueryFirstOrDefaultAsync<dynamic>(@"
             throw new Exception("Database Error: " + ex.Message);
         }
     }
-    // ✅ ADD THIS METHOD to ApplicationService.cs
     public async Task<IEnumerable<ApplicationRecordDto>> GetMyApplicationsAsync(string userId)
     {
         using var conn = new NpgsqlConnection(_connString);
@@ -315,7 +304,7 @@ var mainData = await conn.QueryFirstOrDefaultAsync<dynamic>(@"
             JOIN public.jobs j ON a.job_id = j.id
             JOIN public.companies c ON j.company_id = c.id
             WHERE a.user_id = @userId 
-              AND j.status = 1     /* ✅ THIS HIDES CLOSED JOBS */
+                            AND j.status = 1
             ORDER BY a.applied_date DESC;
         ";
 

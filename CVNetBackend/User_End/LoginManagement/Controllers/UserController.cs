@@ -13,7 +13,6 @@ public class UserController : ControllerBase
     private readonly UserService _userService;
     private readonly FirestoreService _firestoreService;
 
-    // ✅ Inject the deletion services
     public UserController(UserService userService, FirestoreService firestoreService)
     {
         _userService = userService;
@@ -40,26 +39,24 @@ public class UserController : ControllerBase
         }
     }
 
-    // ✅ NEW: The Master Deletion Endpoint
     [HttpDelete("delete-account")]
-    [Authorize] // Requires valid JWT
+    [Authorize]
     public async Task<IActionResult> DeleteAccount()
     {
         try
         {
-            // Safely extract the ID of the person making the request
             var uid = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
             if (string.IsNullOrEmpty(uid)) return Unauthorized();
 
             Console.WriteLine($"[CRITICAL] Initiating full system wipe for UID: {uid}");
 
-            // 1. Wipe PostgreSQL (SQL Tables) using your existing UserService logic
+            // Delete the SQL profile data first.
             await _userService.DeleteFullUserProfile(uid);
 
-            // 2. Wipe Firestore (NoSQL Document)
+            // Delete the Firestore document next.
             await _firestoreService.DeleteUserDocument(uid);
 
-            // 3. Wipe Firebase Auth Identity (Revokes all tokens instantly)
+            // Remove the Firebase Auth identity last.
             await FirebaseAuth.DefaultInstance.DeleteUserAsync(uid);
 
             Console.WriteLine($"[SUCCESS] Data obliterated for UID: {uid}");

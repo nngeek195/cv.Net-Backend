@@ -5,7 +5,6 @@ import uvicorn
 import asyncio
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException
 
-# Sub-folder imports
 from Cv_handle.DataExtract import extract_structured_cv
 from Cv_handle.service import map_cv_to_schema as map_pdf_to_schema
 from Cv_handle.DataHandler import DataHandler as PDFDataHandler
@@ -18,7 +17,6 @@ app = FastAPI()
 PDF_DIR = "pdfs"
 if not os.path.exists(PDF_DIR): os.makedirs(PDF_DIR)
 
-# --- ENDPOINT 1: CV PDF EXTRACTION ---
 @app.post("/extract-cv")
 async def process_cv(user_id: str = Form(...), file: UploadFile = File(...)):
     file_path = os.path.join(PDF_DIR, file.filename)

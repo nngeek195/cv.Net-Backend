@@ -2,7 +2,7 @@ import os
 import psycopg2
 from psycopg2.extras import execute_values
 import logging
-from datetime import datetime # ✅ ADDED IMPORT
+from datetime import datetime
 
 class LinkedInDataHandler:
     def __init__(self):
@@ -28,7 +28,6 @@ class LinkedInDataHandler:
             profile_id = row[0]
             print(f"DB ✅ Found profile_id: {profile_id}. Starting merge...")
 
-            # --- 1. CORE IDENTITY MERGE ---
             u = data.get('user', {})
             print("DB -> Merging Core User Info...")
             cur.execute("""
@@ -51,9 +50,7 @@ class LinkedInDataHandler:
             """, (u.get('portfolioUrl'), u.get('currentOrg'), u.get('currentPosition'), 
                   u.get('personalStatement'), u.get('aboutMe'), profile_id))
 
-            # =========================================================================
-            # ✅ DATE SANITIZATION HELPER
-            # =========================================================================
+            # Normalize dates before inserting relational records.
             def sanitize_date(val, is_required=False):
                 default_date = '1900-01-01' if is_required else None
                 if not val or str(val).strip() == "":
@@ -78,7 +75,7 @@ class LinkedInDataHandler:
                     
                 return default_date
 
-            # --- 2. UNIQUE RECORD APPEND CONTROLLER ---
+            # Insert only records that do not already exist.
             def merge_unique(table, check_col, data_key, cols, mapping):
                 items = data.get(data_key, [])
                 if not items: return
@@ -99,7 +96,6 @@ class LinkedInDataHandler:
                     execute_values(cur, f'INSERT INTO public."{table}" ({col_str}) VALUES %s',
                                    [v + ('now', 'now') for v in to_insert])
 
-            # --- 3. EXECUTE ALL 13 RELATIONAL ARRAYS ---
             merge_unique("skill", "skill_name", "skills", ["profile_id", "skill_name", "level"], lambda x: (profile_id, x.get('skillName'), x.get('level') or "Beginner"))
             merge_unique("experience", "company_name", "experience", ["profile_id", "company_name", "start_date", "end_date", "role_description"], lambda x: (profile_id, x.get('companyName'), sanitize_date(x.get('startDate'), True), sanitize_date(x.get('endDate'), False), x.get('roleDescription') or ""))
             merge_unique("education", "degree_title", "education", ["profile_id", "degree_title", "field_of_study", "organization", "start_date", "end_date"], lambda x: (profile_id, x.get('degreeTitle'), x.get('fieldOfStudy') or "", x.get('organization'), sanitize_date(x.get('startDate'), True), sanitize_date(x.get('endDate'), True)))

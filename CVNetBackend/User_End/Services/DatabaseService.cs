@@ -28,8 +28,7 @@ public class DatabaseService
 
     public NpgsqlConnection GetConnection() => new NpgsqlConnection(_connectionString);
 
-    // ✅ FIX: Accepts firstName and lastName individually
-    // ✅ FIX: Back to accepting a single 'fullName' to match the SQL column 'full_name'
+    // Upsert the main user record in PostgreSQL.
     public async Task UpsertUserToPostgres(string uid, string email, string fullName, string agreement)
     {
         using var conn = new NpgsqlConnection(_connectionString);
@@ -68,7 +67,7 @@ public class DatabaseService
         await cmd.ExecuteNonQueryAsync();
     }
 
-    // ✅ FIX: Now targets first_name and last_name during Settings Page updates
+    // Update the user record from the settings page.
     public async Task<bool> UpdateUserDetails(string uid, string email, string fullName)
     {
         using var conn = new NpgsqlConnection(_connectionString);
@@ -81,7 +80,6 @@ public class DatabaseService
         cmd.Parameters.AddWithValue("fullName", fullName);
         cmd.Parameters.AddWithValue("id", uid);
 
-        // Returns true if the database was actually updated
         int rowsAffected = await cmd.ExecuteNonQueryAsync();
         return rowsAffected > 0;
     }

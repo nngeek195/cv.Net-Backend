@@ -29,19 +29,19 @@ else
 
 var builder = WebApplication.CreateBuilder(args);
 
-// 1. ✅ DYNAMIC CORS CONFIGURATION
+// Allow browser clients from approved origins.
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("CVNetCorsPolicy", policy =>
     {
-        policy.SetIsOriginAllowed(origin => true) // Allows localhost, 10.x.x.x IPs, EC2 IPs, Vercel
+        policy.SetIsOriginAllowed(origin => true)
               .AllowAnyHeader()
               .AllowAnyMethod()
               .AllowCredentials();
     });
 });
 
-// 2. CONFIGURE JWT AUTHENTICATION (FIREBASE)
+// Validate Firebase JWT tokens.
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
     {
@@ -56,7 +56,7 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         };
     });
 
-// 3. RATE LIMITING
+// Apply a simple request rate limit.
 builder.Services.AddRateLimiter(options =>
 {
     options.AddFixedWindowLimiter("api-limiter", opt =>
@@ -68,7 +68,6 @@ builder.Services.AddRateLimiter(options =>
     });
 });
 
-// 4. REGISTER SERVICES
 builder.Services.AddScoped<DatabaseService>();     
 builder.Services.AddScoped<ProfileService>();      
 builder.Services.AddScoped<SkillMatrixEngine>();   
@@ -101,11 +100,10 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
-// 5. CRITICAL: MIDDLEWARE PIPELINE ORDER
-app.UseRouting();               // Ensure routing context is initialized first
-app.UseCors("CVNetCorsPolicy"); // 1. Pass CORS check
-app.UseAuthentication();        // 2. Verify Firebase JWT Token
-app.UseAuthorization();         // 3. Check Permissions
+app.UseRouting();
+app.UseCors("CVNetCorsPolicy");
+app.UseAuthentication();
+app.UseAuthorization();
 
 app.MapControllers().RequireRateLimiting("api-limiter");
 

@@ -10,7 +10,6 @@ public class CreateJobDto
     public string EmploymentType { get; set; } = "FULL_TIME";
     public string WorkplaceType { get; set; } = "ONSITE";
     
-    // ✅ Allowed to be null/empty safely
     public string? Location { get; set; }
     public int Openings { get; set; } = 1;
     public string? Description { get; set; }
@@ -30,7 +29,6 @@ public class JobSkillDto
 {
     public string Name { get; set; } = string.Empty;
     public string Level { get; set; } = "INTERMEDIATE";
-    // ✅ NEW: Visibility Flags
     public bool IsVisible { get; set; } = true;
     public bool ShowLevel { get; set; } = true;
 }

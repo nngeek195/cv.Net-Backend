@@ -7,18 +7,16 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 # 1. Imports from your sub-folders (using folder.file syntax)
+# Local feature imports.
 from Cv_handle.DataExtract import extract_structured_cv
 from Cv_handle.service import map_cv_to_schema as map_pdf_to_schema
 from Cv_handle.DataHandler import DataHandler as PDFDataHandler
-
 from fill_with_Linkedinn.linkedin_service import get_linkedin_data, map_linkedin_to_schema
 from fill_with_Linkedinn.linkedin_data_handler import LinkedInDataHandler
 
 app = FastAPI()
 
-# ✅ FIXED CORS MIDDLEWARE
-# Using allow_origin_regex allows any origin (localhost, EC2 IP, Vercel) 
-# while keeping allow_credentials=True valid for the browser!
+# Allow the frontend to call the API from local and deployed environments.
 app.add_middleware(
     CORSMiddleware,
     allow_origin_regex=".*",
@@ -33,13 +31,13 @@ PDF_DIR = "pdfs"
 if not os.path.exists(PDF_DIR):
     os.makedirs(PDF_DIR)
     print(f"[INIT] Created PDF directory at: {PDF_DIR}")
-    
-# ✅ Define the exact JSON payload expected from React
+
+
+# Request body for the CV processing endpoint.
 class PDFProcessRequest(BaseModel):
     userId: str
     cvUrl: str
 
-# --- ENDPOINT 1: CV EXTRACTION (CLOUDINARY PDF) ---
 @app.post("/process-pdf")
 async def process_cv(payload: PDFProcessRequest):
     print("\n" + "="*50)
@@ -48,12 +46,11 @@ async def process_cv(payload: PDFProcessRequest):
     print(f"🔗 [CV URL]: {payload.cvUrl}")
     print("="*50)
 
-    # Generate a temporary local filename
+    # Store the downloaded CV locally before extraction.
     temp_filename = f"{uuid.uuid4()}.pdf"
     file_path = os.path.join(PDF_DIR, temp_filename)
     
     try:
-        # STEP 1: Download
         print(f"⏳ [STEP 1] Downloading PDF from Cloudinary...")
         response = requests.get(payload.cvUrl, stream=True)
         response.raise_for_status()
@@ -62,7 +59,6 @@ async def process_cv(payload: PDFProcessRequest):
                 f.write(chunk)
         print(f"✅ [STEP 1] PDF saved locally as: {temp_filename}")
 
-        # STEP 2: Extract Text
         print(f"⏳ [STEP 2] Extracting raw text from PDF using DataExtract.py...")
         raw_data = extract_structured_cv(file_path)
         
@@ -75,7 +71,6 @@ async def process_cv(payload: PDFProcessRequest):
         print(f"✅ [STEP 2] Extraction complete. Found {sections_found} distinct sections.")
         print(f"📄 [DEBUG] Raw Text Length: {len(cv_text)} characters.")
 
-        # STEP 3: AI Schema Mapping
         print(f"⏳ [STEP 3] Sending raw text to AI Brain (service.py) for schema mapping...")
         structured_json = map_pdf_to_schema(cv_text)
         
@@ -85,11 +80,10 @@ async def process_cv(payload: PDFProcessRequest):
             
         print(f"✅ [STEP 3] AI Mapping successful. Keys generated: {list(structured_json.keys())}")
 
-        # STEP 4: Inject Cloudinary URL
+        # Keep the source PDF URL with the extracted record.
         structured_json['cvUrl'] = payload.cvUrl
         print(f"🔗 [STEP 4] Injected Cloudinary URL into structured data.")
 
-        # STEP 5: Database Save
         print(f"⏳ [STEP 5] Sending structured data to PostgreSQL via DataHandler.py...")
         db_success = handler.save_to_postgres(payload.userId, structured_json)
 
@@ -114,7 +108,7 @@ async def process_cv(payload: PDFProcessRequest):
         print(f"❌ [CRITICAL ERROR] Pipeline failed: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
     finally:
-        # STEP 6: Cleanup
+        # Remove temporary files after processing.
         print(f"🧹 [CLEANUP] Removing temporary files...")
         if os.path.exists(file_path):
             os.remove(file_path)
@@ -125,7 +119,6 @@ async def process_cv(payload: PDFProcessRequest):
             os.remove(json_temp_name)
             print(f"🗑️ Deleted temporary JSON file.")
 
-# --- ENDPOINT 2: LINKEDIN SYNC (PILOTERR) ---
 @app.post("/sync-linkedin")
 async def sync_linkedin(user_id: str = Form(...), profile_url: str = Form(...)):
     print(f"\n--- STARTING LINKEDIN SYNC ---")

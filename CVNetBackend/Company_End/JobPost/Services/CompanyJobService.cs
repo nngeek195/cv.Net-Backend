@@ -80,7 +80,6 @@ public class CompanyJobService
                 wpType = dto.WorkplaceType,
                 loc = dto.Location,
                 openings = dto.Openings,
-                // ✅ FIXED: Coalesce null values to empty strings to satisfy the NOT NULL constraint!
                 desc = dto.Description ?? "", 
                 resp = dto.Responsibilities ?? "",
                 sal = dto.SalaryRange,

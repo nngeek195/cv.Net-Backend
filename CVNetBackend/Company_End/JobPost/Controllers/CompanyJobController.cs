@@ -33,7 +33,6 @@ public class CompanyJobController : ControllerBase
     {
         try
         {
-            // ✅ BULLETPROOF FIX: Checks for BOTH standard JWT format and .NET's complex mapped schema format
             var email = User.Claims.FirstOrDefault(c => c.Type == "email" || c.Type == ClaimTypes.Email)?.Value;
             
             if (string.IsNullOrEmpty(email)) 

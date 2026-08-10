@@ -35,7 +35,6 @@ public class CompanyDashboardService
         await conn.OpenAsync();
         var dashboard = new RecruiterDashboardDto();
 
-        // STEP 1: FIND COMPANY ID
         Console.WriteLine("-> Executing Query 1: Finding Company ID...");
         var companyId = await conn.QueryFirstOrDefaultAsync<Guid?>(
             "SELECT id FROM public.companies WHERE hr_email = @email LIMIT 1", 
@@ -46,13 +45,11 @@ public class CompanyDashboardService
         
         Console.WriteLine($"   SUCCESS: Found Company ID: {companyId}");
 
-        // STEP 2: OPEN POSITIONS
         Console.WriteLine("-> Executing Query 2: Fetching Open Positions...");
         dashboard.OpenPositions = await conn.QueryFirstOrDefaultAsync<int>(
             "SELECT COUNT(id)::int FROM public.jobs WHERE company_id = @cid AND status = 1", 
             new { cid = companyId });
 
-        // STEP 3: STATS
         Console.WriteLine("-> Executing Query 3: Fetching Total Apps & Avg Match...");
         var statsSql = @"
             SELECT 
@@ -69,7 +66,6 @@ public class CompanyDashboardService
             dashboard.AverageMatchScore = stats.AvgMatch;
         }
 
-        // STEP 4: TRENDS
         Console.WriteLine("-> Executing Query 4: Fetching Application Trends...");
         var trendsSql = @"
             WITH months AS (
@@ -95,7 +91,6 @@ public class CompanyDashboardService
         var trends = await conn.QueryAsync<MonthlyTrendDto>(trendsSql, new { cid = companyId });
         dashboard.ApplicationTrends = trends.ToList();
 
-        // STEP 5: TOP CANDIDATES
         Console.WriteLine("-> Executing Query 5: Fetching Top Candidates...");
         var topCandidatesSql = @"
             SELECT 

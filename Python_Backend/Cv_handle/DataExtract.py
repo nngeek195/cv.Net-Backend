@@ -4,9 +4,6 @@ import json
 from typing import List, Dict, Tuple, Optional
 
 
-# --------------------------------------------------
-# STEP 1: DETECT IF PAGE IS SINGLE OR TWO-COLUMN
-# --------------------------------------------------
 def detect_columns(words, page_width, gap_threshold=60) -> Optional[float]:
     """
     Returns the X split point if two columns detected, else None.
@@ -15,14 +12,11 @@ def detect_columns(words, page_width, gap_threshold=60) -> Optional[float]:
     if not words:
         return None
 
-    # Collect all x0 positions
     x_positions = sorted(set(round(w['x0']) for w in words))
 
     if len(x_positions) < 4:
         return None
 
-    # Look for the largest gap between consecutive X positions
-    # Only consider gaps in the middle 20%-80% of page width to avoid margins
     left_bound = page_width * 0.20
     right_bound = page_width * 0.80
 
@@ -37,23 +31,17 @@ def detect_columns(words, page_width, gap_threshold=60) -> Optional[float]:
         if gap >= gap_threshold and left_bound <= x_curr <= right_bound:
             if gap > best_gap:
                 best_gap = gap
-                best_split = (x_curr + x_next) / 2  # midpoint of the gap
+                best_split = (x_curr + x_next) / 2
 
-    return best_split  # None if no significant gap found
+    return best_split
 
 
-# --------------------------------------------------
-# STEP 2: SPLIT WORDS INTO LEFT / RIGHT COLUMNS
-# --------------------------------------------------
 def split_words_by_column(words, split_x) -> Tuple[List, List]:
     left = [w for w in words if w['x0'] < split_x]
     right = [w for w in words if w['x0'] >= split_x]
     return left, right
 
 
-# --------------------------------------------------
-# STEP 3: GROUP WORDS INTO LINES (within a column)
-# --------------------------------------------------
 def group_words_into_lines(words, y_threshold=4) -> List[Dict]:
     """
     Returns a list of dicts: {text, top, x0}
@@ -90,9 +78,6 @@ def group_words_into_lines(words, y_threshold=4) -> List[Dict]:
     return lines
 
 
-# --------------------------------------------------
-# STEP 4: SECTION DETECTION
-# --------------------------------------------------
 SECTION_HEADERS = {
     "education":        ["education", "academic background", "qualifications", "academic qualification", "degree", "university", "college"],
     "experience":       ["experience", "work history", "employment", "internship", "professional experience", "work experience", "career history"],
@@ -121,7 +106,6 @@ def detect_section_header(line_text: str) -> Optional[str]:
     for section, keywords in SECTION_HEADERS.items():
         if cleaned in keywords:
             return section
-        # Also match if line IS just the keyword (even with caps/symbols)
         for kw in keywords:
             if re.fullmatch(rf"[^a-z]*{re.escape(kw)}[^a-z]*", cleaned):
                 return section
@@ -154,9 +138,6 @@ def group_lines_into_sections(lines: List[Dict]) -> Dict[str, List[str]]:
     return sections
 
 
-# --------------------------------------------------
-# STEP 5: EXTRACT STRUCTURED FIELDS FROM SECTIONS
-# --------------------------------------------------
 KNOWN_SKILLS = [
     "python", "java", "javascript", "typescript", "react", "angular",
     "node", "next.js", "docker", "kubernetes", "mongodb", "sql",
@@ -191,7 +172,6 @@ KNOWN_SKILLS = [
 def extract_name(header_lines: List[str]) -> Optional[str]:
     for line in header_lines[:6]:
         stripped = line.strip()
-        # Name: usually all caps, or title case, 2-4 words, no special chars
         if stripped.isupper() and 2 <= len(stripped.split()) <= 5:
             return stripped.title()
         if re.match(r'^[A-Z][a-z]+ [A-Z][a-z]+', stripped) and len(stripped.split()) <= 5:
@@ -217,14 +197,12 @@ def extract_location(all_text: str) -> Optional[str]:
 
 
 def extract_skills_from_sections(sections: Dict) -> List[str]:
-    # Check dedicated skills section first, then scan all text
     skills_text = " ".join(sections.get("skills", [])).lower()
     all_text = " ".join(
         line for lines in sections.values() for line in lines
     ).lower()
 
     found = set()
-    # Prioritize skills section, but fall back to full text
     search_text = skills_text if skills_text else all_text
     for skill in KNOWN_SKILLS:
         pattern = r'\b' + re.escape(skill) + r'\b'
@@ -257,9 +235,6 @@ def extract_certifications(sections: Dict) -> List[str]:
     return [line for line in sections.get("certifications", []) if line.strip()]
 
 
-# --------------------------------------------------
-# STEP 6: PROCESS ONE PAGE (column-aware)
-# --------------------------------------------------
 def process_page(page) -> Dict[str, List[str]]:
     """
     Detects columns, processes each column separately,
@@ -269,7 +244,6 @@ def process_page(page) -> Dict[str, List[str]]:
     if not words:
         return {}
 
-    # Add page-level metadata
     enriched_words = [
         {**w, "top": w["top"], "x0": w["x0"]}
         for w in words
@@ -279,7 +253,6 @@ def process_page(page) -> Dict[str, List[str]]:
     split_x = detect_columns(enriched_words, page_width)
 
     if split_x:
-        # Two-column layout detected
         left_words, right_words = split_words_by_column(enriched_words, split_x)
 
         left_lines = group_words_into_lines(left_words)
@@ -288,7 +261,6 @@ def process_page(page) -> Dict[str, List[str]]:
         left_sections = group_lines_into_sections(left_lines)
         right_sections = group_lines_into_sections(right_lines)
 
-        # Merge: combine both columns' sections
         merged = {}
         all_keys = set(left_sections.keys()) | set(right_sections.keys())
         for key in all_keys:
@@ -296,14 +268,10 @@ def process_page(page) -> Dict[str, List[str]]:
         return merged
 
     else:
-        # Single-column layout
         lines = group_words_into_lines(enriched_words)
         return group_lines_into_sections(lines)
 
 
-# --------------------------------------------------
-# STEP 7: FULL PDF → STRUCTURED DATA
-# --------------------------------------------------
 def extract_structured_cv(pdf_path: str) -> Dict:
     merged_sections: Dict[str, List[str]] = {}
 
@@ -315,7 +283,6 @@ def extract_structured_cv(pdf_path: str) -> Dict:
                     merged_sections[key] = []
                 merged_sections[key].extend(lines)
 
-    # Build all_text for regex-based extraction
     all_text = "\n".join(
         line for lines in merged_sections.values() for line in lines
     )
@@ -334,13 +301,10 @@ def extract_structured_cv(pdf_path: str) -> Dict:
         "summary":              merged_sections.get("summary", []),
         "achievements":         merged_sections.get("achievements", []),
         "languages":            merged_sections.get("languages", []),
-        "_raw_sections":        merged_sections   # useful for debugging
+        "_raw_sections":        merged_sections
     }
 
 
-# --------------------------------------------------
-# STEP 8: CLI ENTRY POINT
-# --------------------------------------------------
 if __name__ == "__main__":
     import sys
     import os
@@ -352,12 +316,9 @@ if __name__ == "__main__":
     pdf_file = sys.argv[1]
     show_raw = "--raw" in sys.argv
 
-    # Determine output JSON path
-    # If second arg is provided and not a flag, use it as output path
     if len(sys.argv) >= 3 and not sys.argv[2].startswith("--"):
         output_file = sys.argv[2]
     else:
-        # Default: same name as PDF but .json extension
         base_name = os.path.splitext(os.path.basename(pdf_file))[0]
         output_file = f"{base_name}_extracted.json"
 
@@ -367,7 +328,6 @@ if __name__ == "__main__":
     if not show_raw:
         data.pop("_raw_sections", None)
 
-    # Save to JSON file
     with open(output_file, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=4, ensure_ascii=False)
 
