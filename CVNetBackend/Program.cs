@@ -78,7 +78,7 @@ builder.Services.AddScoped<AdminService>();
 builder.Services.AddScoped<CVNetBackend.User_End.JobApply.Services.CandidateJobService>();
 builder.Services.AddScoped<CVNetBackend.User_End.JobApply.Services.ApplicationService>();
 
-builder.Services.AddScoped<CVNetBackend.Company_End.JobManagement.Services.CompanyJobService>();
+builder.Services.AddScoped<CVNetBackend.Company_End.Services.CompanyJobService>();
 builder.Services.AddScoped<CVNetBackend.Company_End.Services.CompanyProfileService>();
 builder.Services.AddScoped<CVNetBackend.Company_End.ApplicationsView.Services.JobDetailsService>();
 builder.Services.AddScoped<CVNetBackend.Company_End.Interviews.Services.InterviewService>();
