@@ -2,15 +2,17 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Authorization;
 using CVNetBackend.Company_End.Interviews.Models;
 using CVNetBackend.Company_End.Interviews.Services;
-using CVNetBackend.Company_End.ApplicationsView.Services; // Required to fetch isolated profiles
+using CVNetBackend.Company_End.ApplicationsView.Services;
 using System.Threading.Tasks;
+using System.Security.Claims;
+using System.Linq;
 using System;
 
 namespace CVNetBackend.Company_End.Interviews.Controllers;
 
 [ApiController]
 [Route("api/interviews")]
-// [Authorize] // Keep disabled until testing is done
+[Authorize] // 🔒 LOCK ENABLED
 public class InterviewsController : ControllerBase
 {
     private readonly InterviewService _service;
@@ -22,10 +24,21 @@ public class InterviewsController : ControllerBase
         _jobService = jobService;
     }
 
+    private string? GetUserEmail()
+    {
+        return User.Claims.FirstOrDefault(c => c.Type == "email" || c.Type == ClaimTypes.Email)?.Value;
+    }
+
     [HttpGet]
     public async Task<IActionResult> GetInterviews()
     {
-        try { return Ok(await _service.GetAllInterviewsAsync()); }
+        try 
+        { 
+            var email = GetUserEmail();
+            if (string.IsNullOrEmpty(email)) return Unauthorized(new { error = "Invalid token." });
+
+            return Ok(await _service.GetAllInterviewsAsync(email)); 
+        }
         catch (Exception ex) { return StatusCode(500, new { error = ex.Message }); }
     }
 
@@ -34,7 +47,10 @@ public class InterviewsController : ControllerBase
     {
         try 
         { 
-            await _service.ScheduleInterviewAsync(callId, dto.InterviewDate);
+            var email = GetUserEmail();
+            if (string.IsNullOrEmpty(email)) return Unauthorized();
+
+            await _service.ScheduleInterviewAsync(callId, dto.InterviewDate, email);
             return Ok(new { success = true });
         }
         catch (Exception ex) { return StatusCode(500, new { error = ex.Message }); }
@@ -45,7 +61,10 @@ public class InterviewsController : ControllerBase
     {
         try 
         { 
-            await _service.RejectCandidateAsync(callId, dto.Reason);
+            var email = GetUserEmail();
+            if (string.IsNullOrEmpty(email)) return Unauthorized();
+
+            await _service.RejectCandidateAsync(callId, dto.Reason, email);
             return Ok(new { success = true });
         }
         catch (Exception ex) { return StatusCode(500, new { error = ex.Message }); }
@@ -56,9 +75,12 @@ public class InterviewsController : ControllerBase
     {
         try 
         {
-            var (portalId, password) = await _service.CreateSharedPortalAsync(dto);
+            var email = GetUserEmail();
+            if (string.IsNullOrEmpty(email)) return Unauthorized();
+
+            var (portalId, password) = await _service.CreateSharedPortalAsync(dto, email);
             return Ok(new { 
-                link = $"/board/{portalId}", // Secure frontend route
+                link = $"/board/{portalId}",
                 password = password 
             });
         }
@@ -68,7 +90,13 @@ public class InterviewsController : ControllerBase
     [HttpGet("portals")]
     public async Task<IActionResult> GetActivePortals()
     {
-        try { return Ok(await _service.GetActivePortalsAsync()); }
+        try 
+        { 
+            var email = GetUserEmail();
+            if (string.IsNullOrEmpty(email)) return Unauthorized();
+
+            return Ok(await _service.GetActivePortalsAsync(email)); 
+        }
         catch (Exception ex) { return StatusCode(500, new { error = ex.Message }); }
     }
 
@@ -77,46 +105,49 @@ public class InterviewsController : ControllerBase
     {
         try 
         { 
-            await _service.DeletePortalAsync(portalId);
+            var email = GetUserEmail();
+            if (string.IsNullOrEmpty(email)) return Unauthorized();
+
+            await _service.DeletePortalAsync(portalId, email);
             return Ok(new { success = true });
         }
         catch (Exception ex) { return StatusCode(500, new { error = ex.Message }); }
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // SECURE PORTAL GATEWAYS (Strict PIN required)
+    // SECURE PORTAL GATEWAYS (Strict PIN required) - AllowAnonymous kept intact
     // ─────────────────────────────────────────────────────────────────────────
 
     [HttpGet("shared/{portalId}/data")]
     [AllowAnonymous] 
-public async Task<IActionResult> GetPortalData(string portalId, [FromHeader(Name = "X-Portal-PIN")] string pin)
-{
-    Console.WriteLine($"\n[DEBUG - CONTROLLER] Request received for Portal: {portalId}");
-    Console.WriteLine($"[DEBUG - CONTROLLER] X-Portal-PIN Header provided: {!string.IsNullOrEmpty(pin)}");
+    public async Task<IActionResult> GetPortalData(string portalId, [FromHeader(Name = "X-Portal-PIN")] string pin)
+    {
+        Console.WriteLine($"\n[DEBUG - CONTROLLER] Request received for Portal: {portalId}");
+        Console.WriteLine($"[DEBUG - CONTROLLER] X-Portal-PIN Header provided: {!string.IsNullOrEmpty(pin)}");
 
-    try 
-    { 
-        if (string.IsNullOrEmpty(pin)) 
-        {
-            Console.WriteLine("[DEBUG - CONTROLLER] 🚨 Missing PIN Header!");
-            return Unauthorized(new { error = "Access PIN required." });
+        try 
+        { 
+            if (string.IsNullOrEmpty(pin)) 
+            {
+                Console.WriteLine("[DEBUG - CONTROLLER] 🚨 Missing PIN Header!");
+                return Unauthorized(new { error = "Access PIN required." });
+            }
+            
+            var data = await _service.GetPortalDataAsync(portalId, pin);
+            Console.WriteLine($"[DEBUG - CONTROLLER] Returning OK with {data.Count()} job groups.");
+            return Ok(data); 
         }
-        
-        var data = await _service.GetPortalDataAsync(portalId, pin);
-        Console.WriteLine($"[DEBUG - CONTROLLER] Returning OK with {data.Count()} job groups.");
-        return Ok(data); 
+        catch (UnauthorizedAccessException ex) 
+        { 
+            Console.WriteLine($"[DEBUG - CONTROLLER] 🚨 Unauthorized: {ex.Message}");
+            return Unauthorized(new { error = ex.Message }); 
+        }
+        catch (Exception ex) 
+        { 
+            Console.WriteLine($"[DEBUG - CONTROLLER] 🚨 Fatal Error: {ex.Message}");
+            return StatusCode(500, new { error = ex.Message }); 
+        }
     }
-    catch (UnauthorizedAccessException ex) 
-    { 
-        Console.WriteLine($"[DEBUG - CONTROLLER] 🚨 Unauthorized: {ex.Message}");
-        return Unauthorized(new { error = ex.Message }); 
-    }
-    catch (Exception ex) 
-    { 
-        Console.WriteLine($"[DEBUG - CONTROLLER] 🚨 Fatal Error: {ex.Message}");
-        return StatusCode(500, new { error = ex.Message }); 
-    }
-}
 
     [HttpGet("shared/{portalId}/applicant/{appId}")]
     [AllowAnonymous] 
@@ -126,11 +157,9 @@ public async Task<IActionResult> GetPortalData(string portalId, [FromHeader(Name
         {
             if (string.IsNullOrEmpty(pin)) return Unauthorized(new { error = "Access PIN required." });
 
-            // 1. Verify PIN and mathematically prove Candidate belongs to this board
             bool isAuthorized = await _service.VerifyCandidateInPortalAsync(portalId, pin, appId);
             if (!isAuthorized) return Unauthorized(new { error = "Security Violation: Unauthorized data access." });
 
-            // 2. Fetch isolated profile only if check passed
             var profile = await _jobService.GetFullApplicantProfileAsync(appId);
             if (profile == null) return NotFound();
             

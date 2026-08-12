@@ -18,19 +18,25 @@ public class CandidateService
         _connString = $"Host={host};Port={port};Database={db};Username={user};Password={pass};SslMode=Require;Trust Server Certificate=true;";
     }
 
-    public async Task<IEnumerable<JobFilterDto>> GetActiveJobsAsync()
+    // 1. Secured Job List
+    public async Task<IEnumerable<JobFilterDto>> GetActiveJobsAsync(string userEmail)
     {
         using var conn = new NpgsqlConnection(_connString);
         await conn.OpenAsync();
-        // Assuming you want to show jobs that have applicants or are active
+        
+        // 🔒 SQL BOUNDARY: Join companies and filter by hr_email
         return await conn.QueryAsync<JobFilterDto>(
-            @"SELECT id::text AS ""Id"", title AS ""Title"" 
-              FROM public.jobs 
-              ORDER BY created_at DESC;"
+            @"SELECT j.id::text AS ""Id"", j.title AS ""Title"" 
+              FROM public.jobs j
+              JOIN public.companies c ON j.company_id = c.id
+              WHERE c.hr_email = @email
+              ORDER BY j.created_at DESC;",
+            new { email = userEmail }
         );
     }
 
-    public async Task<IEnumerable<CandidateListDto>> GetCandidatesAsync(string? jobId, string? sortOrder, string? search)
+    // 2. Secured Candidate List
+    public async Task<IEnumerable<CandidateListDto>> GetCandidatesAsync(string userEmail, string? jobId, string? sortOrder, string? search)
     {
         using var conn = new NpgsqlConnection(_connString);
         await conn.OpenAsync();
@@ -55,7 +61,8 @@ public class CandidateService
             JOIN public.""user"" u ON a.user_id = u.id
             JOIN public.application_snapshots s ON a.snapshot_id = s.id
             JOIN public.jobs j ON a.job_id = j.id
-            WHERE 1=1
+            JOIN public.companies c ON j.company_id = c.id 
+            WHERE c.hr_email = @email -- 🔒 SQL BOUNDARY ENFORCED
             {(string.IsNullOrEmpty(jobId) ? "" : " AND a.job_id = @jobId::uuid")}
             {(string.IsNullOrEmpty(search) ? "" : @" AND (
                 u.full_name ILIKE @search 
@@ -63,10 +70,14 @@ public class CandidateService
                 OR EXISTS (SELECT 1 FROM public.snapshot_education ed WHERE ed.snapshot_id = s.id AND ed.organization ILIKE @search)
             )")}
             {orderClause};";
+            
         var parameters = new { 
+            email = userEmail, // Pass the email parameter
             jobId, 
             search = string.IsNullOrEmpty(search) ? null : $"%{search}%" 
         };
+
+        // ... (The rest of the mapping logic remains exactly the same)
 
         var rawCandidates = (await conn.QueryAsync<dynamic>(sql, parameters)).ToList();
         var result = new List<CandidateListDto>();

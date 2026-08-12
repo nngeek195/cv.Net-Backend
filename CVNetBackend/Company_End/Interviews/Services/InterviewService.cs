@@ -3,6 +3,11 @@ using Dapper;
 using CVNetBackend.Company_End.Interviews.Models;
 using System.Security.Cryptography;
 using System.Text;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
+using Microsoft.Extensions.Configuration;
 
 namespace CVNetBackend.Company_End.Interviews.Services;
 
@@ -20,7 +25,7 @@ public class InterviewService
         _connString = $"Host={host};Port={port};Database={db};Username={user};Password={pass};SslMode=Require;Trust Server Certificate=true;";
     }
 
-    public async Task<IEnumerable<InterviewCandidateDto>> GetAllInterviewsAsync()
+    public async Task<IEnumerable<InterviewCandidateDto>> GetAllInterviewsAsync(string email)
     {
         using var conn = new NpgsqlConnection(_connString);
         await conn.OpenAsync();
@@ -40,20 +45,31 @@ public class InterviewService
             JOIN public.job_applications a ON c.application_id = a.id
             JOIN public.""user"" u ON c.user_id = u.id
             JOIN public.jobs j ON c.job_id = j.id
+            JOIN public.companies comp ON j.company_id = comp.id
+            WHERE comp.hr_email = @email
             ORDER BY c.created_at DESC;";
 
-        return await conn.QueryAsync<InterviewCandidateDto>(sql);
+        return await conn.QueryAsync<InterviewCandidateDto>(sql, new { email });
     }
 
-    public async Task<bool> ScheduleInterviewAsync(string callId, DateTime interviewDate)
+    public async Task<bool> ScheduleInterviewAsync(string callId, DateTime interviewDate, string email)
     {
         using var conn = new NpgsqlConnection(_connString);
         await conn.OpenAsync();
-        const string sql = "UPDATE public.call_for_interviews SET interview_date = @interviewDate WHERE id = @callId::uuid";
-        return (await conn.ExecuteAsync(sql, new { callId, interviewDate })) > 0;
+        
+        const string sql = @"
+            UPDATE public.call_for_interviews 
+            SET interview_date = @interviewDate 
+            WHERE id = @callId::uuid AND job_id IN (
+                SELECT j.id FROM public.jobs j 
+                JOIN public.companies comp ON j.company_id = comp.id 
+                WHERE comp.hr_email = @email
+            )";
+            
+        return (await conn.ExecuteAsync(sql, new { callId, interviewDate, email })) > 0;
     }
 
-    public async Task<bool> RejectCandidateAsync(string callId, string reason)
+    public async Task<bool> RejectCandidateAsync(string callId, string reason, string email)
     {
         using var conn = new NpgsqlConnection(_connString);
         await conn.OpenAsync();
@@ -64,9 +80,12 @@ public class InterviewService
                 @"SELECT c.user_id, c.application_id, c.job_id, a.snapshot_id 
                   FROM public.call_for_interviews c
                   JOIN public.job_applications a ON c.application_id = a.id
-                  WHERE c.id = @callId::uuid", new { callId });
+                  JOIN public.jobs j ON c.job_id = j.id
+                  JOIN public.companies comp ON j.company_id = comp.id
+                  WHERE c.id = @callId::uuid AND comp.hr_email = @email", 
+                  new { callId, email });
 
-            if (call == null) throw new Exception("Interview record not found.");
+            if (call == null) throw new UnauthorizedAccessException("Interview record not found or unauthorized access.");
 
             await conn.ExecuteAsync(
                 @"INSERT INTO public.reject_records (id, user_id, application_id, job_id, reason, rejected_date)
@@ -92,17 +111,28 @@ public class InterviewService
     // SECURE PORTAL MODULE & TIMEZONE FIXES
     // ─────────────────────────────────────────────────────────────────────────
 
-    public async Task<(string PortalId, string PlainPassword)> CreateSharedPortalAsync(CreatePortalRequestDto dto)
+    public async Task<(string PortalId, string PlainPassword)> CreateSharedPortalAsync(CreatePortalRequestDto dto, string email)
     {
         using var conn = new NpgsqlConnection(_connString);
         await conn.OpenAsync();
+        
+        // 🔒 Verify all JobIds being shared belong to the user's company
+        var ownedJobsCount = await conn.QueryFirstOrDefaultAsync<int>(@"
+            SELECT COUNT(j.id) 
+            FROM public.jobs j
+            JOIN public.companies c ON j.company_id = c.id
+            WHERE c.hr_email = @email AND j.id::text = ANY(@jobIds)", 
+            new { email, jobIds = dto.JobIds.ToArray() });
+
+        if (ownedJobsCount != dto.JobIds.Count) 
+            throw new UnauthorizedAccessException("One or more jobs do not belong to your company.");
+
         using var trans = await conn.BeginTransactionAsync();
         try
         {
             string pin = Guid.NewGuid().ToString("N").Substring(0, 8).ToUpper();
             var portalId = Guid.NewGuid().ToString();
 
-            // TIMEZONE FIX: Force alignment to UTC +5:30 to counteract Midnight UTC shift
             DateTime localDate = dto.InterviewDate.ToUniversalTime().AddHours(5).AddMinutes(30);
             string dateStr = localDate.ToString("yyyy-MM-dd");
             string expStr = localDate.AddDays(7).ToString("yyyy-MM-dd HH:mm:ss");
@@ -125,7 +155,7 @@ public class InterviewService
         catch (Exception ex) { Console.WriteLine($"[CREATE PORTAL ERROR] {ex.Message}"); await trans.RollbackAsync(); throw; }
     }
 
-    public async Task<IEnumerable<ActivePortalDto>> GetActivePortalsAsync()
+    public async Task<IEnumerable<ActivePortalDto>> GetActivePortalsAsync(string email)
     {
         using var conn = new NpgsqlConnection(_connString);
         await conn.OpenAsync();
@@ -140,8 +170,10 @@ public class InterviewService
             FROM public.shared_interview_portals p
             LEFT JOIN public.shared_portal_jobs spj ON p.id = spj.portal_id
             LEFT JOIN public.jobs j ON spj.job_id = j.id
-            WHERE p.expires_at > CURRENT_TIMESTAMP
-            ORDER BY p.created_at DESC");
+            JOIN public.companies comp ON j.company_id = comp.id
+            WHERE p.expires_at > CURRENT_TIMESTAMP AND comp.hr_email = @email
+            ORDER BY p.created_at DESC", 
+            new { email });
 
         return portals.GroupBy(p => new { p.PortalId, p.InterviewDate, p.ExpiresAt, p.Password })
             .Select(g => new ActivePortalDto
@@ -154,11 +186,22 @@ public class InterviewService
             });
     }
 
-    public async Task<bool> DeletePortalAsync(string portalId)
+    public async Task<bool> DeletePortalAsync(string portalId, string email)
     {
         using var conn = new NpgsqlConnection(_connString);
         await conn.OpenAsync();
-        return (await conn.ExecuteAsync("DELETE FROM public.shared_interview_portals WHERE id = @pid::uuid", new { pid = portalId })) > 0;
+        
+        // 🔒 Only delete if the portal has jobs owned by the requesting company
+        const string sql = @"
+            DELETE FROM public.shared_interview_portals 
+            WHERE id = @pid::uuid AND id IN (
+                SELECT spj.portal_id FROM public.shared_portal_jobs spj
+                JOIN public.jobs j ON spj.job_id = j.id
+                JOIN public.companies c ON j.company_id = c.id
+                WHERE c.hr_email = @email
+            )";
+            
+        return (await conn.ExecuteAsync(sql, new { pid = portalId, email })) > 0;
     }
 
     public async Task<bool> VerifyPortalPasswordAsync(string portalId, string plainPassword)
@@ -171,121 +214,112 @@ public class InterviewService
     }
 
     public async Task<bool> VerifyCandidateInPortalAsync(string portalId, string plainPassword, string appId)
-{
-    // 1. Validate PIN
-    if (!await VerifyPortalPasswordAsync(portalId, plainPassword)) return false;
+    {
+        if (!await VerifyPortalPasswordAsync(portalId, plainPassword)) return false;
 
-    using var conn = new NpgsqlConnection(_connString);
-    await conn.OpenAsync();
+        using var conn = new NpgsqlConnection(_connString);
+        await conn.OpenAsync();
 
-    // 2. Validate Candidate Ownership (Date check temporarily removed to match list query)
-    var count = await conn.QueryFirstOrDefaultAsync<int>(@"
-        SELECT COUNT(1)
-        FROM public.call_for_interviews c
-        JOIN public.shared_portal_jobs spj ON c.job_id = spj.job_id
-        JOIN public.shared_interview_portals p ON spj.portal_id = p.id
-        WHERE p.id = @pid::uuid 
-          AND c.application_id = @aid::uuid
-          /* 🚨 DISABLED DATE CHECK TO PREVENT SECURITY VIOLATION FALSE ALARM 🚨 */
-          /* AND DATE(c.interview_date AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Colombo') = p.interview_date */", 
-        new { pid = portalId, aid = appId });
+        var count = await conn.QueryFirstOrDefaultAsync<int>(@"
+            SELECT COUNT(1)
+            FROM public.call_for_interviews c
+            JOIN public.shared_portal_jobs spj ON c.job_id = spj.job_id
+            JOIN public.shared_interview_portals p ON spj.portal_id = p.id
+            WHERE p.id = @pid::uuid 
+              AND c.application_id = @aid::uuid", 
+            new { pid = portalId, aid = appId });
 
-    return count > 0;
-}
+        return count > 0;
+    }
 
     public async Task<IEnumerable<SharedPortalDataDto>> GetPortalDataAsync(string portalId, string plainPassword)
-{
-    Console.WriteLine($"\n[DEBUG - SERVICE] Starting GetPortalDataAsync for Portal: {portalId}");
-    
-    if (!await VerifyPortalPasswordAsync(portalId, plainPassword)) 
     {
-        Console.WriteLine("[DEBUG - SERVICE] 🚨 PIN Verification Failed!");
-        throw new UnauthorizedAccessException("Unauthorized: Invalid PIN or expired portal.");
-    }
-    
-    Console.WriteLine("[DEBUG - SERVICE] PIN Verified. Fetching portal info...");
-
-    using var conn = new NpgsqlConnection(_connString);
-    await conn.OpenAsync();
-
-    var portalInfo = await conn.QueryFirstOrDefaultAsync<dynamic>("SELECT interview_date::text FROM public.shared_interview_portals WHERE id = @pid::uuid", new { pid = portalId });
-    
-    if (portalInfo == null) 
-    {
-        Console.WriteLine("[DEBUG - SERVICE] 🚨 Portal not found in DB!");
-        throw new Exception("Portal not found.");
-    }
-    
-    string dateStr = (string)portalInfo.interview_date;
-    Console.WriteLine($"[DEBUG - SERVICE] Portal Date found: {dateStr}");
-
-    var jobs = await conn.QueryAsync<SharedPortalDataDto>(@"
-        SELECT j.id::text AS ""JobId"", j.title AS ""JobTitle""
-        FROM public.jobs j
-        JOIN public.shared_portal_jobs spj ON j.id = spj.job_id
-        WHERE spj.portal_id = @pid::uuid", new { pid = portalId });
-
-    var resultList = jobs.ToList();
-    Console.WriteLine($"[DEBUG - SERVICE] Found {resultList.Count} jobs linked to this portal.");
-
-    foreach (var job in resultList)
-{
-    Console.WriteLine($"\n[DEEP DEBUG] --- TRACING DATA FOR JOB: {job.JobTitle} ({job.JobId}) ---");
-
-    // TEST 1: Are there any calls for this job at all?
-    var callsCount = await conn.QueryFirstOrDefaultAsync<int>(
-        "SELECT COUNT(*) FROM public.call_for_interviews WHERE job_id = @jid::uuid",
-        new { jid = job.JobId });
-    Console.WriteLine($"[DEEP DEBUG] 1. Total raw interviews for this job: {callsCount}");
-
-    if (callsCount > 0)
-    {
-        // TEST 2: Do those calls connect to valid applications?
-        var appsCount = await conn.QueryFirstOrDefaultAsync<int>(@"
-            SELECT COUNT(*) FROM public.call_for_interviews c
-            JOIN public.job_applications a ON c.application_id = a.id
-            WHERE c.job_id = @jid::uuid", new { jid = job.JobId });
-        Console.WriteLine($"[DEEP DEBUG] 2. Matches after JOIN with job_applications: {appsCount}");
-
-        // TEST 3: Do those applications have frozen snapshots?
-        var snapsCount = await conn.QueryFirstOrDefaultAsync<int>(@"
-            SELECT COUNT(*) FROM public.call_for_interviews c
-            JOIN public.job_applications a ON c.application_id = a.id
-            JOIN public.application_snapshots s ON a.snapshot_id = s.id
-            WHERE c.job_id = @jid::uuid", new { jid = job.JobId });
-        Console.WriteLine($"[DEEP DEBUG] 3. Matches after JOIN with application_snapshots: {snapsCount}");
+        Console.WriteLine($"\n[DEBUG - SERVICE] Starting GetPortalDataAsync for Portal: {portalId}");
         
-        // TEST 4: Do those calls connect to a valid user account?
-        var usersCount = await conn.QueryFirstOrDefaultAsync<int>(@"
-            SELECT COUNT(*) FROM public.call_for_interviews c
-            JOIN public.job_applications a ON c.application_id = a.id
-            JOIN public.application_snapshots s ON a.snapshot_id = s.id
-            JOIN public.""user"" u ON c.user_id = u.id
-            WHERE c.job_id = @jid::uuid", new { jid = job.JobId });
-        Console.WriteLine($"[DEEP DEBUG] 4. Matches after JOIN with user table: {usersCount}");
+        if (!await VerifyPortalPasswordAsync(portalId, plainPassword)) 
+        {
+            Console.WriteLine("[DEBUG - SERVICE] 🚨 PIN Verification Failed!");
+            throw new UnauthorizedAccessException("Unauthorized: Invalid PIN or expired portal.");
+        }
+        
+        Console.WriteLine("[DEBUG - SERVICE] PIN Verified. Fetching portal info...");
+
+        using var conn = new NpgsqlConnection(_connString);
+        await conn.OpenAsync();
+
+        var portalInfo = await conn.QueryFirstOrDefaultAsync<dynamic>("SELECT interview_date::text FROM public.shared_interview_portals WHERE id = @pid::uuid", new { pid = portalId });
+        
+        if (portalInfo == null) 
+        {
+            Console.WriteLine("[DEBUG - SERVICE] 🚨 Portal not found in DB!");
+            throw new Exception("Portal not found.");
+        }
+        
+        string dateStr = (string)portalInfo.interview_date;
+        Console.WriteLine($"[DEBUG - SERVICE] Portal Date found: {dateStr}");
+
+        var jobs = await conn.QueryAsync<SharedPortalDataDto>(@"
+            SELECT j.id::text AS ""JobId"", j.title AS ""JobTitle""
+            FROM public.jobs j
+            JOIN public.shared_portal_jobs spj ON j.id = spj.job_id
+            WHERE spj.portal_id = @pid::uuid", new { pid = portalId });
+
+        var resultList = jobs.ToList();
+        Console.WriteLine($"[DEBUG - SERVICE] Found {resultList.Count} jobs linked to this portal.");
+
+        foreach (var job in resultList)
+        {
+            Console.WriteLine($"\n[DEEP DEBUG] --- TRACING DATA FOR JOB: {job.JobTitle} ({job.JobId}) ---");
+
+            var callsCount = await conn.QueryFirstOrDefaultAsync<int>(
+                "SELECT COUNT(*) FROM public.call_for_interviews WHERE job_id = @jid::uuid",
+                new { jid = job.JobId });
+            Console.WriteLine($"[DEEP DEBUG] 1. Total raw interviews for this job: {callsCount}");
+
+            if (callsCount > 0)
+            {
+                var appsCount = await conn.QueryFirstOrDefaultAsync<int>(@"
+                    SELECT COUNT(*) FROM public.call_for_interviews c
+                    JOIN public.job_applications a ON c.application_id = a.id
+                    WHERE c.job_id = @jid::uuid", new { jid = job.JobId });
+                Console.WriteLine($"[DEEP DEBUG] 2. Matches after JOIN with job_applications: {appsCount}");
+
+                var snapsCount = await conn.QueryFirstOrDefaultAsync<int>(@"
+                    SELECT COUNT(*) FROM public.call_for_interviews c
+                    JOIN public.job_applications a ON c.application_id = a.id
+                    JOIN public.application_snapshots s ON a.snapshot_id = s.id
+                    WHERE c.job_id = @jid::uuid", new { jid = job.JobId });
+                Console.WriteLine($"[DEEP DEBUG] 3. Matches after JOIN with application_snapshots: {snapsCount}");
+                
+                var usersCount = await conn.QueryFirstOrDefaultAsync<int>(@"
+                    SELECT COUNT(*) FROM public.call_for_interviews c
+                    JOIN public.job_applications a ON c.application_id = a.id
+                    JOIN public.application_snapshots s ON a.snapshot_id = s.id
+                    JOIN public.""user"" u ON c.user_id = u.id
+                    WHERE c.job_id = @jid::uuid", new { jid = job.JobId });
+                Console.WriteLine($"[DEEP DEBUG] 4. Matches after JOIN with user table: {usersCount}");
+            }
+            
+            Console.WriteLine("[DEEP DEBUG] ----------------------------------------------------\n");
+
+            var candidates = await conn.QueryAsync<PortalCandidateDto>(@"
+                SELECT 
+                    a.id::text AS ""AppId"", 
+                    u.full_name AS ""FullName"", 
+                    u.email AS ""Email"", 
+                    u.profile_image_url AS ""ProfileImageUrl"",
+                    s.industry_score AS ""IndustryScore"", 
+                    c.interview_date AS ""InterviewTime""
+                FROM public.call_for_interviews c
+                JOIN public.job_applications a ON c.application_id = a.id
+                JOIN public.""user"" u ON c.user_id = u.id
+                JOIN public.application_snapshots s ON a.snapshot_id = s.id
+                WHERE c.job_id = @jid::uuid", 
+                new { jid = job.JobId });
+
+            job.Candidates = candidates.ToList();
+        }
+
+        return resultList.Where(j => j.Candidates.Any());
     }
-    
-    Console.WriteLine("[DEEP DEBUG] ----------------------------------------------------\n");
-
-    // (Keep your original candidate fetch logic here, with the DATE check still commented out)
-    var candidates = await conn.QueryAsync<PortalCandidateDto>(@"
-        SELECT 
-            a.id::text AS ""AppId"", 
-            u.full_name AS ""FullName"", 
-            u.email AS ""Email"", 
-            u.profile_image_url AS ""ProfileImageUrl"",
-            s.industry_score AS ""IndustryScore"", 
-            c.interview_date AS ""InterviewTime""
-        FROM public.call_for_interviews c
-        JOIN public.job_applications a ON c.application_id = a.id
-        JOIN public.""user"" u ON c.user_id = u.id
-        JOIN public.application_snapshots s ON a.snapshot_id = s.id
-        WHERE c.job_id = @jid::uuid", // Notice DATE is still removed
-        new { jid = job.JobId });
-
-    job.Candidates = candidates.ToList();
-}
-
-    return resultList.Where(j => j.Candidates.Any());
-}
 }
